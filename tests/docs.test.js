@@ -252,6 +252,23 @@ check('every docs operation requires team membership', (() => {
   return ops === 4 && checks === 4;
 })());
 
+/* ------------------------------------------------------------------ *
+ * A table pasted into a personal note has no place in a shared doc, but the words must survive.
+ * ------------------------------------------------------------------ */
+group('Sharing a note that holds a pasted table');
+{
+  const html = '<div>Plan</div><div class="np-tbl-wrap"><table class="np-table"><colgroup><col style="width:90px"></colgroup>' +
+    '<tbody><tr><th style="background-color:red">Region</th><th>Units</th></tr>' +
+    '<tr><td>North</td><td><b>1,200</b></td></tr><tr><td></td><td>&nbsp;</td></tr></tbody></table></div><div>end</div>';
+  const out = D.clean(html);
+  check('the table tags are gone (shared docs are text and lists only)', !/<(table|tr|td|th|tbody|colgroup|col)\b/i.test(out), out);
+  check('no styling from the table is carried over', !/style=|background/i.test(out), out);
+  check('every row keeps its words, one line per row, cells split by " | "',
+    out.indexOf('<div>Region | Units</div>') >= 0 && out.indexOf('<div>North | 1,200</div>') >= 0, out);
+  check('an empty row leaves no blank line behind', (out.match(/<div> \| <\/div>/g) || []).length === 0, out);
+  check('the text around the table is untouched', out.indexOf('Plan') >= 0 && out.indexOf('end') >= 0, out);
+}
+
 /* ------------------------------------------------------------------ */
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

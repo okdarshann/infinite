@@ -57,6 +57,19 @@
         // Link preview cards from a personal note are not shared; a plain link keeps its words but loses the link.
         if (n.nodeType === 1 && n.classList && n.classList.contains('np-linkcard')) { n.remove(); return; }
         if (n.nodeType === 1 && n.tagName === 'A') { n.replaceWith(document.createTextNode(n.textContent)); return; }
+        // Shared docs have no tables. A table from a personal note keeps its words: one line per row, cells split by " | ".
+        if (n.nodeType === 1 && n.tagName === 'TABLE') {
+          const frag = document.createDocumentFragment();
+          Array.from(n.rows || []).forEach((tr) => {
+            const cells = Array.from(tr.cells || []).map((c) => (c.textContent || '').replace(/[\s\u00a0]+/g, ' ').trim());
+            if (!cells.some(Boolean)) return;
+            const line = document.createElement('div');
+            line.textContent = cells.join(' | ');
+            frag.appendChild(line);
+          });
+          n.replaceWith(frag);
+          return;
+        }
         if (n.nodeType !== 1 || !DOC_TAGS.has(n.tagName)) { n.remove(); return; }
         const kept = {};
         KEEP_ATTRS.forEach((k) => { const v = n.getAttribute(k); if (v !== null) kept[k] = v; });

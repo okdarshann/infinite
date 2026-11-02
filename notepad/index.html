@@ -47,6 +47,15 @@
     #np-img-bar .np-pct { min-width: 42px; text-align: center; font-size: 12px; color: var(--muted, #8b95a8); }
     #np-img-bar .np-sep { width: 1px; height: 18px; margin: 0 3px; background: var(--line, #2a3347); }
 
+    /* Pasted tables: real tables inside the note; wide ones scroll sideways instead of breaking the page */
+    #note-body .np-tbl-wrap { max-width: 100%; overflow-x: auto; margin: 12px 0; -webkit-overflow-scrolling: touch; }
+    #note-body table.np-table { border-collapse: collapse; width: auto; max-width: none; font-size: 14px; line-height: 1.5; background: transparent; }
+    #note-body table.np-table td, #note-body table.np-table th { box-sizing: border-box; min-width: 28px; padding: 6px 10px; text-align: left; vertical-align: top; font-weight: 400; overflow-wrap: break-word; border: 0 solid var(--line); }
+    #note-body table.np-table th { font-weight: 700; }
+    #note-body table.np-tbl-plain td, #note-body table.np-tbl-plain th { border: 1px solid var(--line); }
+    #note-body table.np-table td > div, #note-body table.np-table th > div { margin: 0; }
+    #note-body table.np-table ul, #note-body table.np-table ol { margin: 2px 0; padding-left: 20px; }
+
     /* Floating text toolbar (appears over selected text) */
     #np-fmt { position: fixed; z-index: 70; display: none; align-items: center; gap: 2px; padding: 4px; background: var(--surface2, #141c2b); border: 1px solid var(--line, #223047); border-radius: 11px; box-shadow: 0 8px 26px rgba(0,0,0,.5); user-select: none; -webkit-user-select: none; }
     #np-fmt button { position: relative; min-width: 30px; height: 30px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--text, #e9eff7); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
@@ -77,11 +86,13 @@
   <script src="../static/js/ai-chat.js?v=9" defer></script>
   <!-- Shared doc helpers (sanitizer + "who wrote which part" stamps). Deliberately
        without defer: the inline page script below runs while the page is parsing. -->
-  <script src="../static/js/doc-attrib.js?v=3"></script>
+  <script src="../static/js/doc-attrib.js?v=4"></script>
   <!-- Client-side PDF export (white page, rich text, images, clickable links): html2canvas + jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="../static/js/tour.js?v=1" defer></script>
+  <link rel="stylesheet" href="../static/css/mobile.css?v=2">
+  <script src="../static/js/mobile-responsive.js?v=2" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -1328,6 +1339,392 @@ function countAllNotes(arr) {
         });
       });
 
+      /* ---------- pasted tables ----------
+       * Copy a table from Excel, Google Sheets, Word, a web page or a chat answer and paste it into
+       * one of YOUR notes: it arrives as a real table you can keep typing in, and it keeps what made
+       * the original look the way it did - merged cells, borders, cell fills, bold / italic / underline /
+       * text colour, alignment and column widths. Plain-text tables (tab separated, or | markdown |)
+       * become tables too.
+       * The clipboard HTML is only ever READ: it is laid out inside a hidden sandboxed frame (no scripts,
+       * no network) so classes and <style> rules are resolved into real values, and the table in the note
+       * is rebuilt from a whitelist of tags and style properties. Nothing else from the clipboard gets in.
+       * Team docs stay plain-text paste only (see the paste handler above).
+       */
+      const TBL_MAX_CELLS = 2500;          // a note is synced as one ~1 MB document, so very big tables go in as text
+      const TBL_MAX_HTML = 600000;
+      const TBL_BLOCK_TAG = /^(P|DIV|H[1-6]|PRE|BLOCKQUOTE|SECTION|ARTICLE|HEADER|FOOTER|ASIDE|NAV|MAIN|FIGURE|FIGCAPTION|ADDRESS|CENTER|DL|DT|DD|FIELDSET|LEGEND)$/;
+      const tblClamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+      function tblColor(s) {               // "rgb(1, 2, 3)" / "rgba(1, 2, 3, .5)" -> { r, g, b, a } or null
+        const m = String(s || '').match(/^rgba?\(\s*(\d+(?:\.\d+)?)[,\s]+(\d+(?:\.\d+)?)[,\s]+(\d+(?:\.\d+)?)(?:\s*[,/]\s*(\d*\.?\d+%?))?\s*\)$/i);
+        if (!m) return null;
+        const a = m[4] === undefined ? 1 : (/%$/.test(m[4]) ? parseFloat(m[4]) / 100 : parseFloat(m[4]));
+        return { r: Math.round(+m[1]), g: Math.round(+m[2]), b: Math.round(+m[3]), a: tblClamp(isNaN(a) ? 1 : a, 0, 1) };
+      }
+      const tblCss = (c) => c.a >= 1 ? 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')'
+        : 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + (Math.round(c.a * 100) / 100) + ')';
+      // Near-black, near-white and grey would vanish on one of the two themes (Excel's "automatic" black
+      // text on a dark page, a dark-mode site's white text on a light one) so they follow the theme instead.
+      // A colour sitting on a cell fill is always kept: the pair was chosen together.
+      function tblIsInk(c) {
+        const mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b);
+        const y = (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255;
+        return mx - mn <= 40 && (y < 0.2 || y > 0.85);
+      }
+
+      // Parse the clipboard HTML without running or loading anything, then drop what a table never needs.
+      function tblParse(html) {
+        const strip = (s) => String(s).replace(/@import[^;]*;?/gi, '').replace(/url\s*\([^)]*\)/gi, 'none');
+        const doc = new DOMParser().parseFromString(String(html), 'text/html');
+        doc.querySelectorAll('script,iframe,frame,object,embed,link,base,meta,img,picture,video,audio,source,svg,canvas,form,input,button,select,textarea,noscript,template,title').forEach((e) => e.remove());
+        doc.querySelectorAll('*').forEach((e) => {
+          Array.from(e.attributes).forEach((a) => {
+            const name = a.name.toLowerCase();
+            if (name.indexOf('on') === 0 || name === 'background' || name === 'src' || name === 'srcset' || name === 'poster') e.removeAttribute(a.name);
+            else if (name === 'style') e.setAttribute('style', strip(a.value));
+          });
+        });
+        doc.querySelectorAll('style').forEach((s) => { s.textContent = strip(s.textContent); });
+        return doc;
+      }
+
+      // A hidden, sandboxed frame as wide as the note: the browser resolves classes, <style> rules and
+      // table layout there, and we read the finished values back with getComputedStyle.
+      function tblRender(doc) {
+        const frame = document.createElement('iframe');
+        frame.setAttribute('sandbox', 'allow-same-origin');          // no scripts, no forms, no popups
+        frame.setAttribute('aria-hidden', 'true');
+        frame.tabIndex = -1;
+        const w = tblClamp(Math.round(body.clientWidth || 780), 320, 1400);
+        frame.style.cssText = 'position:fixed;left:-20000px;top:0;width:' + w + 'px;height:800px;border:0;visibility:hidden;pointer-events:none;';
+        document.body.appendChild(frame);
+        const d = frame.contentDocument;
+        d.open(); d.write('<!DOCTYPE html>' + doc.documentElement.outerHTML); d.close();
+        return { frame, d, win: frame.contentWindow };
+      }
+
+      function tblBorders(cs, hasBg) {
+        const out = []; let any = false;
+        ['Top', 'Right', 'Bottom', 'Left'].forEach((side) => {
+          const style = cs['border' + side + 'Style'];
+          const wpx = parseFloat(cs['border' + side + 'Width']) || 0;
+          const bc = tblColor(cs['border' + side + 'Color']);
+          if (!style || style === 'none' || style === 'hidden' || wpx <= 0 || !bc || bc.a < 0.02) return;
+          any = true;
+          const kind = /^(dashed|dotted|double)$/.test(style) ? style : 'solid';
+          let w = Math.round(tblClamp(wpx, 1, 4));
+          if (kind === 'double') w = Math.max(3, w);
+          out.push('border-' + side.toLowerCase() + ':' + w + 'px ' + kind + ' ' + ((!hasBg && tblIsInk(bc)) ? 'var(--text)' : tblCss(bc)));
+        });
+        return { css: out, any };
+      }
+
+      // What an inner element changes compared with its parent (bold, italic, underline, colour, highlight).
+      function tblInlineStyle(cs, pcs, ctx, isLink) {
+        const out = []; let hasBg = false;
+        const bold = (s) => s.fontWeight === 'bold' || +s.fontWeight >= 600;
+        const ital = (s) => /^(italic|oblique)/.test(s.fontStyle);
+        if (bold(cs) !== bold(pcs)) out.push('font-weight:' + (bold(cs) ? 700 : 400));
+        if (ital(cs) !== ital(pcs)) out.push('font-style:' + (ital(cs) ? 'italic' : 'normal'));
+        if (!isLink) {
+          const dl = cs.textDecorationLine || '';
+          const dec = [/underline/.test(dl) && 'underline', /line-through/.test(dl) && 'line-through'].filter(Boolean).join(' ');
+          if (dec) out.push('text-decoration:' + dec);
+          const fg = tblColor(cs.color);
+          if (fg && fg.a > 0.02 && cs.color !== pcs.color && (ctx.hasBg || !tblIsInk(fg))) out.push('color:' + tblCss(fg));
+          const bg = tblColor(cs.backgroundColor);
+          if (bg && bg.a > 0.02) { out.push('background-color:' + tblCss(bg)); hasBg = true; }
+        }
+        return { css: out.join(';'), hasBg };
+      }
+
+      function tblContent(srcParent, outParent, ctx, parentCS, depth) {
+        const win = ctx.env.win;
+        Array.from(srcParent.childNodes).forEach((n) => {
+          if (n.nodeType === 3) {
+            const t = n.nodeValue.replace(/[ \t\r\n\f]+/g, ' ');
+            if (t) outParent.appendChild(document.createTextNode(t));
+            return;
+          }
+          if (n.nodeType !== 1) return;
+          const tag = n.tagName;
+          const cs = win.getComputedStyle(n);
+          if (cs.display === 'none') return;                                  // hidden rows / spans (Excel hides columns this way)
+          if (tag === 'BR') { outParent.appendChild(document.createElement('br')); return; }
+          if (tag === 'TABLE') {                                              // a table inside a cell: one level is kept, deeper becomes text
+            if (depth < 2) outParent.appendChild(tblConvertTable(n, ctx.env, depth + 1).table);
+            else outParent.appendChild(document.createTextNode(' ' + (n.textContent || '').replace(/\s+/g, ' ').trim() + ' '));
+            return;
+          }
+          let el = null;
+          const isLink = tag === 'A' && !!httpUrl(n.getAttribute('href'));
+          if (isLink) {
+            el = document.createElement('a');
+            el.setAttribute('href', httpUrl(n.getAttribute('href')));
+            el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer');
+          } else if (/^(UL|OL|LI|SUB|SUP)$/.test(tag)) {
+            el = document.createElement(tag.toLowerCase());
+          } else if (TBL_BLOCK_TAG.test(tag) || /^(block|flex|grid|list-item|flow-root)$/.test(cs.display)) {
+            el = document.createElement('div');
+          }
+          const sty = tblInlineStyle(cs, parentCS, ctx, tag === 'A');          // any anchor: the browser's blue underline is not copied
+          if (!el) {
+            if (!sty.css) { tblContent(n, outParent, ctx, cs, depth); return; }   // plain wrapper: keep its content only
+            el = document.createElement('span');
+          }
+          if (sty.css) el.setAttribute('style', sty.css);
+          tblContent(n, el, { env: ctx.env, hasBg: ctx.hasBg || sty.hasBg }, cs, depth);
+          outParent.appendChild(el);
+        });
+      }
+
+      // trim the stray blank lines Word / Excel leave at the start and end of a cell
+      function tblTidyCell(td) {
+        const blank = (n) => n.nodeType === 3 ? !/[^\s\u00a0]/.test(n.nodeValue)
+          : (n.nodeType === 1 && (n.tagName === 'BR' || (!/[^\s\u00a0]/.test(n.textContent || '') && !n.querySelector('table,a,ul,ol'))));
+        while (td.firstChild && blank(td.firstChild)) td.removeChild(td.firstChild);
+        while (td.lastChild && blank(td.lastChild)) td.removeChild(td.lastChild);
+        if (td.firstChild && td.firstChild.nodeType === 3) td.firstChild.nodeValue = td.firstChild.nodeValue.replace(/^\s+/, '');
+        if (td.lastChild && td.lastChild.nodeType === 3) td.lastChild.nodeValue = td.lastChild.nodeValue.replace(/\s+$/, '');
+        if (!td.firstChild) td.appendChild(document.createElement('br'));   // an empty cell keeps its shape and a place for the caret
+      }
+
+      function tblConvertTable(src, env, depth) {
+        const win = env.win;
+        const out = document.createElement('table');
+        out.className = 'np-table';
+        const tableCS = win.getComputedStyle(src);
+        const tbody = document.createElement('tbody');
+        const grid = [], widths = [];
+        let cols = 0, cells = 0, anyBorder = false, ri = 0, lastText = '';
+        const rowsSrc = Array.from(src.rows);
+        rowsSrc.forEach((tr, r) => {
+          const trCS = win.getComputedStyle(tr);
+          if (trCS.display === 'none') return;
+          const group = tr.parentElement && /^T(HEAD|BODY|FOOT)$/.test(tr.parentElement.tagName) ? tr.parentElement : null;
+          const groupCS = group ? win.getComputedStyle(group) : null;
+          const rowOut = document.createElement('tr');
+          grid[ri] = grid[ri] || [];
+          let col = 0;
+          Array.from(tr.cells).forEach((cell) => {
+            const cs = win.getComputedStyle(cell);
+            if (cs.display === 'none') return;
+            while (grid[ri][col]) col++;
+            const cSpan = tblClamp(cell.colSpan || 1, 1, 200);
+            const rSpan = tblClamp(cell.rowSpan || 1, 1, Math.max(1, rowsSrc.length - r));
+            for (let dr = 0; dr < rSpan; dr++) {
+              grid[ri + dr] = grid[ri + dr] || [];
+              for (let dc = 0; dc < cSpan; dc++) grid[ri + dr][col + dc] = true;
+            }
+            // fill: the cell's own, else its row's / row group's / table's (zebra stripes and header rows live there)
+            const bg = [cs, trCS, groupCS, tableCS].map((s) => s && tblColor(s.backgroundColor)).find((c) => c && c.a > 0.02) || null;
+            const isTh = cell.tagName === 'TH';
+            const td = document.createElement(isTh ? 'th' : 'td');
+            if (cSpan > 1) td.setAttribute('colspan', String(cSpan));
+            if (rSpan > 1) td.setAttribute('rowspan', String(rSpan));
+            const st = [];
+            if (bg) st.push('background-color:' + tblCss(bg));
+            const fg = tblColor(cs.color);
+            if (fg && fg.a > 0.02 && (bg || !tblIsInk(fg))) st.push('color:' + tblCss(fg));
+            if (cs.fontWeight === 'bold' || +cs.fontWeight >= 600) st.push('font-weight:700'); else if (isTh) st.push('font-weight:400');
+            if (/^(italic|oblique)/.test(cs.fontStyle)) st.push('font-style:italic');
+            const dl = cs.textDecorationLine || '';
+            const dec = [/underline/.test(dl) && 'underline', /line-through/.test(dl) && 'line-through'].filter(Boolean).join(' ');
+            if (dec) st.push('text-decoration:' + dec);
+            const ta = String(cs.textAlign).replace(/^-(webkit|internal)-/, '');
+            if (ta === 'center' || ta === 'right' || ta === 'justify') st.push('text-align:' + ta);
+            if (/^(top|middle|bottom)$/.test(cs.verticalAlign)) st.push('vertical-align:' + cs.verticalAlign);
+            const bd = tblBorders(cs, !!bg);
+            if (bd.any) anyBorder = true;
+            td.setAttribute('style', st.concat(bd.css).join(';'));
+            tblContent(cell, td, { env, hasBg: !!bg }, cs, depth);
+            tblTidyCell(td);
+            lastText = td.textContent;
+            if (cSpan === 1) {
+              // measured width + what our roomier cell padding takes, so the text area stays as wide as in the source
+              const padLR = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+              const w = Math.round(cell.getBoundingClientRect().width + Math.max(0, 20 - padLR) + 4);
+              if (w > 24) widths[col] = Math.max(widths[col] || 0, w);
+            }
+            col += cSpan; cols = Math.max(cols, col); cells++;
+            rowOut.appendChild(td);
+          });
+          if (rowOut.firstChild) { tbody.appendChild(rowOut); ri++; }
+        });
+        const tb = tblBorders(tableCS, false);
+        if (tb.any) { anyBorder = true; out.setAttribute('style', tb.css.join(';')); }
+        if (widths.some(Boolean)) {                                           // column widths as measured, so the proportions match
+          const cg = document.createElement('colgroup');
+          for (let i = 0; i < cols; i++) {
+            const c = document.createElement('col');
+            if (widths[i]) c.setAttribute('style', 'width:' + widths[i] + 'px');
+            cg.appendChild(c);
+          }
+          out.appendChild(cg);
+        }
+        out.appendChild(tbody);
+        if (!anyBorder) out.classList.add('np-tbl-plain');                    // the source drew no lines at all: give it faint ones so it still reads as a table
+        return { table: out, cells, lastText };
+      }
+
+      const tblWrap = (t) => { const w = document.createElement('div'); w.className = 'np-tbl-wrap'; w.appendChild(t); return w; };
+
+      // clipboard HTML -> { wraps: [...] } | { single: 'text' } | { tooBig: n } | null
+      function tblFromHtml(html) {
+        if (!/<table[\s>]/i.test(html)) return null;
+        if (html.length > TBL_MAX_HTML * 3) return { tooBig: 'a lot of' };
+        const doc = tblParse(html);
+        const top = (t) => !t.parentElement || !t.parentElement.closest('table');
+        const count = Array.from(doc.querySelectorAll('table')).filter(top).reduce((n, t) => n + t.querySelectorAll('td,th').length, 0);
+        if (!count) return null;
+        if (count > TBL_MAX_CELLS) return { tooBig: count };
+        const r = tblRender(doc);
+        try {
+          const built = Array.from(r.d.querySelectorAll('table')).filter(top)
+            .map((t) => tblConvertTable(t, { win: r.win }, 0)).filter((b) => b.cells > 0);
+          if (!built.length) return null;
+          if (built.length === 1 && built[0].cells === 1) return { single: built[0].lastText.replace(/\s+/g, ' ').trim() };   // one copied cell is a word, not a table
+          const wraps = built.map((b) => tblWrap(b.table));
+          if (wraps.reduce((n, w) => n + w.outerHTML.length, 0) > TBL_MAX_HTML) return { tooBig: built.reduce((n, b) => n + b.cells, 0) };
+          return { wraps };
+        } finally { r.frame.remove(); }
+      }
+
+      /* plain text -> tables: tab separated rows, or | markdown | tables (also in the middle of other text) */
+      function tblFromRows(rows, header, aligns) {
+        const t = document.createElement('table');
+        t.className = 'np-table np-tbl-plain';
+        const tb = document.createElement('tbody');
+        const width = rows.reduce((m, r) => Math.max(m, r.length), 0);
+        rows.forEach((cells, i) => {
+          const tr = document.createElement('tr');
+          for (let c = 0; c < width; c++) {
+            const td = document.createElement(header && i === 0 ? 'th' : 'td');
+            if (aligns && aligns[c]) td.setAttribute('style', 'text-align:' + aligns[c]);
+            String(cells[c] || '').split(/(\*\*[^*]+\*\*|<br\s*\/?>)/i).forEach((part) => {
+              if (!part) return;
+              if (/^<br/i.test(part)) td.appendChild(document.createElement('br'));
+              else if (/^\*\*[^*]+\*\*$/.test(part)) { const b = document.createElement('b'); b.textContent = part.slice(2, -2); td.appendChild(b); }
+              else td.appendChild(document.createTextNode(part.replace(/`/g, '')));
+            });
+            if (!td.firstChild) td.appendChild(document.createElement('br'));
+            tr.appendChild(td);
+          }
+          tb.appendChild(tr);
+        });
+        t.appendChild(tb);
+        return tblWrap(t);
+      }
+
+      function tblParseTsv(text) {
+        const lines = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n');
+        if (lines.length < 2 || lines.length > 1500) return null;
+        const n = (lines[0].match(/\t/g) || []).length;
+        if (!n || n > 60) return null;
+        // every line has the same number of tabs and none starts with white space (that would be indented code)
+        if (!lines.every((l) => (l.match(/\t/g) || []).length === n && !/^\s/.test(l))) return null;
+        return [{ el: tblFromRows(lines.map((l) => l.split('\t')), false) }];
+      }
+
+      function tblParseMarkdown(text) {
+        const lines = text.replace(/\r\n?/g, '\n').split('\n');
+        const cellsOf = (l) => {
+          let s = l.trim().replace(/\\\|/g, '\u0001');
+          if (s.charAt(0) === '|') s = s.slice(1);
+          if (s.charAt(s.length - 1) === '|') s = s.slice(0, -1);
+          return s.split('|').map((c) => c.replace(/\u0001/g, '|').trim());
+        };
+        const isSep = (l) => l.indexOf('|') >= 0 && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l);
+        const items = []; let pending = [], found = false;
+        const flush = () => { const t = pending.join('\n').replace(/^\n+|\s+$/g, ''); if (t) items.push({ text: t }); pending = []; };
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].indexOf('|') >= 0 && i + 1 < lines.length && isSep(lines[i + 1]) && cellsOf(lines[i]).length === cellsOf(lines[i + 1]).length) {
+            const aligns = cellsOf(lines[i + 1]).map((c) => (/^:-+:$/.test(c) ? 'center' : (/^-+:$/.test(c) ? 'right' : '')));
+            const rows = [cellsOf(lines[i])];
+            let j = i + 2;
+            while (j < lines.length && lines[j].trim() && lines[j].indexOf('|') >= 0) { rows.push(cellsOf(lines[j])); j++; }
+            flush();
+            items.push({ el: tblFromRows(rows, true, aligns) });
+            found = true; i = j - 1;
+          } else pending.push(lines[i]);
+        }
+        flush();
+        return found ? items : null;
+      }
+
+      function tblInsertText(t) {
+        const { html } = linkifyPaste(t);
+        if (document.execCommand('insertHTML', false, html) === false) document.execCommand('insertText', false, t);
+        body.querySelectorAll('a[data-np-new]').forEach((a) => a.removeAttribute('data-np-new'));
+      }
+
+      function tblCaretAfter(wrap) {
+        let next = wrap.nextSibling;
+        if (!next) { wrap.after(blankLine()); next = wrap.nextSibling; }
+        const sel = window.getSelection();
+        const r = document.createRange();
+        r.setStart(next, 0); r.collapse(true);
+        sel.removeAllRanges(); sel.addRange(r);
+      }
+
+      function tblInsertItems(items) {
+        const sel = window.getSelection();
+        // the caret is inside an existing table: the new one goes under it rather than into a cell
+        const here = sel && sel.rangeCount && sel.anchorNode ? (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement) : null;
+        const inWrap = here && here.closest ? here.closest('.np-tbl-wrap') : null;
+        if (inWrap && body.contains(inWrap) && items.some((it) => it.el)) tblCaretAfter(inWrap);
+        items.forEach((it) => {
+          if (it.text !== undefined) { if (it.text) tblInsertText(it.text); return; }
+          const tbl = it.el.querySelector('table');
+          tbl.setAttribute('data-np-new', '1');
+          document.execCommand('insertHTML', false, it.el.outerHTML);
+          let placed = body.querySelector('table[data-np-new]');
+          if (!placed) {                                                      // the browser refused the HTML: put it in by hand at the caret
+            const r = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+            if (r && body.contains(r.startContainer)) { r.deleteContents(); r.insertNode(it.el); } else body.appendChild(it.el);
+            placed = it.el.querySelector('table');
+          }
+          placed.removeAttribute('data-np-new');
+          let wrap = placed.closest('.np-tbl-wrap');
+          if (!wrap || !body.contains(wrap)) { wrap = tblWrap(placed.cloneNode(true)); placed.replaceWith(wrap); }
+          if (!wrap.previousSibling) wrap.before(blankLine());               // somewhere to type above / below the table
+          const next = wrap.nextSibling;
+          if (!next || (next.nodeType === 1 && next.classList.contains('np-tbl-wrap'))) wrap.after(blankLine());
+          tblCaretAfter(wrap);
+        });
+      }
+
+      body.addEventListener('paste', (e) => {
+        if (teamMode || body.contentEditable !== 'true') return;
+        const cd = e.clipboardData || window.clipboardData;
+        if (!cd) return;
+        const hasHtml = Array.from(cd.types || []).indexOf('text/html') >= 0;
+        const html = hasHtml ? cd.getData('text/html') : '';
+        const text = cd.getData('text/plain') || '';
+        let items = null;
+        try {
+          if (html && /<table[\s>]/i.test(html)) {
+            const res = tblFromHtml(html);
+            if (res && res.tooBig) {
+              e.preventDefault(); e.stopImmediatePropagation();
+              window.alert('That table is very large (' + res.tooBig + ' cells), so it was pasted as plain text. Cloud sync stops working around 1 MB per account, so paste big tables in smaller parts.');
+              if (text) tblInsertText(text);
+              updateNote();
+              return;
+            }
+            if (res && res.single !== undefined) items = [{ text: res.single }];
+            else if (res && res.wraps) items = res.wraps.map((w) => ({ el: w }));
+          } else if (text) {
+            items = (!hasHtml ? tblParseTsv(text) : null) || tblParseMarkdown(text);
+          }
+        } catch (err) { items = null; }                                       // never block a paste because of a table problem
+        if (!items || !items.length) return;                                  // not a table: the other paste handlers carry on
+        e.preventDefault();
+        e.stopImmediatePropagation();                                         // an Excel copy also carries a picture of the cells: do not paste that too
+        tblInsertItems(items);
+        updateNote();
+      });
+
       /* ---------- pasted links: real links + a preview card ----------
        * Pasting a URL into one of YOUR notes turns it into a clickable link and adds a small
        * card under it (thumbnail, title, site). The card is ordinary markup inside the note body,
@@ -2151,6 +2548,33 @@ function countAllNotes(arr) {
             border: 1px solid #e2e8f0;
             page-break-inside: avoid !important;
           }
+          /* Pasted tables */
+          #pdf-export-container .np-tbl-wrap {
+            max-width: 100% !important;
+            overflow: visible !important;
+            margin: 12px 0 !important;
+          }
+          #pdf-export-container table.np-table {
+            border-collapse: collapse !important;
+            max-width: 100% !important;
+            font-size: 13px !important;
+            line-height: 1.45 !important;
+          }
+          #pdf-export-container table.np-table td,
+          #pdf-export-container table.np-table th {
+            box-sizing: border-box;
+            padding: 5px 9px !important;
+            text-align: left;
+            vertical-align: top;
+            overflow-wrap: break-word !important;
+            border: 0 solid #cbd5e1;
+          }
+          #pdf-export-container table.np-table th { font-weight: 700; }
+          #pdf-export-container table.np-tbl-plain td,
+          #pdf-export-container table.np-tbl-plain th { border: 1px solid #cbd5e1 !important; }
+          #pdf-export-container table.np-table tr { page-break-inside: avoid !important; }
+          #pdf-export-container table.np-table td > div,
+          #pdf-export-container table.np-table th > div { margin: 0 !important; }
         `;
         container.appendChild(styleEl);
 
@@ -2192,6 +2616,13 @@ function countAllNotes(arr) {
         const luma = (rgb) => (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
         const INK = '#1e293b';
         b.querySelectorAll('[style]').forEach((el) => {
+          // A pasted table keeps its own fills and text colours (they were chosen as a pair); only the
+          // theme's CSS variable used for its lines needs a paper colour.
+          if (el.closest('.np-tbl-wrap')) {
+            const s = el.getAttribute('style') || '';
+            if (/var\(/i.test(s)) el.setAttribute('style', s.replace(/var\(--text\)/g, INK));
+            return;
+          }
           const col = (el.style.color || '').trim();
           if (col) {
             const rgb = toRgb(col);
