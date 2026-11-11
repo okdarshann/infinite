@@ -4,7 +4,7 @@
 
 Infinite is a free goal and progress tracker that runs entirely in the browser. Track your year, month and week, set daily to yearly goals, plan on a life calendar, take notes, work with friends in teams, and get motivational stories and songs picked for your goals.
 
-Live site: okdarshann.github.io/infinite/
+Live site: [okdarshann.github.io/infinite/](https://okdarshann.github.io/infinite/)
 
 > **Credit**: Inspired by [twi-exe/life-is-short](https://github.com/twi-exe/life-is-short). Credit to the original creator for the core concept 
 
