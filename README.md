@@ -19,10 +19,6 @@ APK Downlaod: https://okdarshann.github.io/infinite-apk-site/
 - **Notepad & Docs**: rich text notes with highlighting. Notes you share with a team stay in sync both ways -- a teammate's edit is merged back into your original note and tagged with who changed it.
 - **Team Goals**: create or join a team with an invite code, share goals, chat and cheer each other on. Shared docs open from a chat bubble in a big live popup showing exactly what each member is allowed to do.
 - **Inspire Feed**: paste any YouTube video or song link under **My Links** and it shows as a clickable thumbnail (click to open on YouTube). Also motivational stories and song previews matched to your goals, updated automatically.
-- **Connect**: a message form for recruiters and builders. Each sender sees their own messages, can edit or
-  delete what they sent, and every reply leaves from your own mail app (`mailto:`) -- there is no inbox to answer from.
-- **Private inbox** (`admin/`): every message in one list with All/Unread filters and search. Reachable only by the
-  account that owns the site, and only after a key you set.
 - **Android and iOS apps**: the same pages packaged with Capacitor, so the tracker installs from a store and opens
   without a browser. Guest data and cloud sync behave exactly as they do on the web.
 - **Accounts and cloud sync**: email login with Firebase, or use it as a guest without an account. Google sign-in is
@@ -134,7 +130,6 @@ What differs inside the app, and why:
   mail app by `static/js/native.js`.
 - **The back gesture walks the page history** and leaves the app from the dashboard.
 - **The dashboard needs no connection**; accounts and sync do, because the Firebase SDK and your data live online.
-- **The developer inbox ships too** (`admin/`), behind exactly the same Firebase rules and developer key.
 
 Before publishing, change `appId` in `capacitor.config.json`, run `npx cap sync`, then set your version and signing
 in Android Studio and Xcode.
@@ -155,8 +150,7 @@ in Android Studio and Xcode.
    firebase deploy --only firestore
    ```
 
-   Skipping step 6 is how the admin inbox ends up shut for everybody -- you included. After deploying you can put
-   the template back (`git checkout firestore.rules`) before your next commit.
+   Skipping step 6 means Firestore rules stay at the template, which still protects teams and users.
 
 > The Firebase Web API key ships in every page that uses Firebase, and the site's JavaScript has to name the admin
 > account so the browser can draw the admin UI -- so neither is treated as a secret here. Knowing the address is not
@@ -508,9 +502,7 @@ Stories come from public RSS feeds. Songs are 30-second previews from the iTunes
 
 ## Sign-in protection
 
-The sign-in, sign-up and reset forms no longer carry a captcha. They used to sit behind Cloudflare Turnstile, checked
-by the same Worker that served the AI chat; the widget went when that backend did. What is left is Firebase's own
-protection:
+The sign-in, sign-up and reset forms no longer carry a captcha. They used to sit behind Cloudflare Turnstile; the widget went when the AI backend was removed. What is left is Firebase's own protection:
 
 - turn on **email enumeration protection** in **Authentication > Settings**, so a wrong password cannot be told apart
   from an address that has no account;
@@ -527,14 +519,13 @@ If you wire a captcha back in, the place to do it is `setAuthOverlayVisible()` a
 ├── index.html            Dashboard
 ├── calendar.html         Legacy redirect to calendar/index.html
 ├── calendar/             Life calendar
+├── lifesheet/            Habit tracker / spreadsheet
 ├── notepad/              Notes and docs
 ├── team/                 Team goals, chat and rewards
-├── contact/              Connect page -- the form and the sender's own messages
-├── admin/                Private inbox of every message (owner + key only)
 ├── static/
 │   ├── css/              Styles, including the .native-* rules for the app shell
-│   ├── js/               auth, native shell, dashboard, team, notes, doc attribution + access control,
-│   │                     inspire feed, developer key, contact + admin inbox
+│   ├── js/               auth, native shell, dashboard, team, notes, life sheet, date picker + access control,
+│   │                     inspire feed, developer key
 │   └── data/news.json    Inspire Feed data (auto-generated)
 ├── android/              Capacitor Android project (Gradle) -- the Play Store build
 ├── ios/                  Capacitor iOS project (Xcode) -- the App Store build
@@ -566,9 +557,7 @@ It identifies the project, it does not grant access -- the rules decide that.
 
 Two things cannot be hidden from a reader of this repo, and pretending otherwise would be the real mistake:
 
-- **the admin address**, because `static/js/contact.js`, `static/js/admin.js` and `static/js/dev-key.js` ship it to
-  the browser -- the page has to know which signed-in account to offer the Developer box to. That is precisely why the
-  inbox is protected by rules rather than by the address being a secret;
+- **the admin address**, because `static/js/auth.js` ships it to the browser -- the page has to know which signed-in account to offer the Developer box to. That is precisely why the inbox is protected by rules rather than by the address being a secret;
 - **the Firebase Web API key**, which ships in `static/js/auth.js`. It identifies the project; the rules decide access.
 
 ## Licence
