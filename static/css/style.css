@@ -508,6 +508,15 @@ h3 {
   flex-wrap: wrap;
 }
 
+.btn.btn-icon {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+  flex: none;
+  font-size: 15px;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1323,146 +1332,87 @@ h3 {
   border-color: var(--red);
 }
 
-.sheet-wrap {
-  overflow-x: auto;
-  padding: 6px 16px 16px;
-}
+.sheet-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 
-table.lsheet {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 720px;
+.sheet-fmt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface2);
 }
+.name-box {
+  min-width: 78px; padding: 5px 10px;
+  border: 1px solid var(--line-soft); border-radius: 6px;
+  background: var(--surface); color: var(--text);
+  font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+  text-align: center; white-space: nowrap;
+}
+.fmt-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line-soft); background: var(--surface);
+  color: var(--muted); border-radius: 6px;
+  padding: 5px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.fmt-btn:hover:not(:disabled) { color: var(--text); border-color: var(--line); }
+.fmt-btn:disabled { opacity: .4; cursor: default; }
+.fmt-hint { margin-left: auto; font-size: 10px; color: var(--faint); letter-spacing: .04em; }
+
+/* Spreadsheet grid: frozen header row + frozen row-number column */
+.sheet-wrap { overflow: auto; max-height: 68vh; padding: 0; -webkit-overflow-scrolling: touch; }
+
+table.lsheet { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; }
 
 table.lsheet th,
 table.lsheet td {
-  border: 1px solid var(--line-soft);
-  padding: 9px 12px;
-  text-align: left;
-  font-size: 12.5px;
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  padding: 0; text-align: left; font-size: 13px;
 }
 
 table.lsheet thead th {
+  position: sticky; top: 0; z-index: 3;
   background: var(--surface2);
-  font-size: 10px;
-  letter-spacing: .12em;
-  color: var(--faint);
-  font-weight: 700;
-  white-space: nowrap;
+  font-size: 10.5px; letter-spacing: .1em; color: var(--muted); font-weight: 700;
+  white-space: nowrap; padding: 0 4px 0 10px; height: 34px; min-width: 112px;
 }
+table.lsheet thead th:first-child {
+  left: 0; z-index: 5; min-width: 44px; width: 44px; padding: 0; text-align: center;
+}
+table.lsheet thead th .th-inner { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+table.lsheet thead th .cell-tools { display: flex; align-items: center; flex: none; }
 
-table.lsheet thead th .th-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
+.lhead { outline: none; min-width: 28px; flex: 1; letter-spacing: .1em; text-transform: uppercase; cursor: text; }
+.lhead:empty::before { content: attr(data-ph); color: var(--faint); }
+.lhead:focus { color: var(--text); }
 
-table.lsheet thead th .cell-tools {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
+.cell-menu {
+  width: 26px; height: 26px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--faint); font-size: 10px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
 }
-
-.lhead {
-  outline: none;
-  min-width: 28px;
-  flex: 1;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  cursor: text;
-}
-
-.lhead:empty::before {
-  content: attr(data-ph);
-  color: var(--faint);
-}
-
-.lhead:focus {
-  color: var(--text);
-}
+.cell-menu:hover { background: var(--surface3); color: var(--text); }
 
 table.lsheet tbody th {
-  background: var(--surface2);
-  color: var(--faint);
-  font-size: 10.5px;
-  width: 92px;
-  text-align: center;
-  padding: 6px 8px;
+  position: sticky; left: 0; z-index: 2;
+  background: var(--surface2); width: 44px; min-width: 44px; text-align: center;
 }
+.row-num-btn {
+  display: block; width: 100%; height: 100%; min-height: 40px;
+  border: 0; background: transparent; color: var(--faint);
+  font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.row-num-btn:hover { color: var(--text); background: var(--surface3); }
 
-table.lsheet td {
-  min-width: 130px;
-}
+table.lsheet td { min-width: 112px; height: 40px; position: relative; }
+table.lsheet td.sel { outline: 2px solid var(--green); outline-offset: -2px; z-index: 1; }
 
 .lcell {
-  flex: 1;
-  min-width: 60px;
-  outline: none;
-  min-height: 18px;
-  white-space: pre-wrap;
-  word-break: break-word;
+  display: block; width: 100%; min-height: 40px; padding: 10px;
+  box-sizing: border-box; outline: none; white-space: pre-wrap; word-break: break-word;
 }
 
-.lcell:focus {
-  background: var(--lav-soft);
-  border-radius: 4px;
-}
-
-.cell-dot {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  cursor: pointer;
-  flex: none;
-  background: conic-gradient(#f66, #fc3, #3d6, #39f, #c6f, #f66);
-}
-
-.row-head {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.row-num {
-  min-width: 12px;
-  font-size: 10.5px;
-  color: var(--faint);
-  font-weight: 700;
-}
-
-.cell-x {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  line-height: 1;
-  font-family: inherit;
-  transition: background .12s, color .12s, border-color .12s;
-}
-
-.cell-x:hover {
-  background: var(--red);
-  border-color: var(--red);
-  color: #fff;
-}
-
-.row-head .cell-dot {
-  width: 11px;
-  height: 11px;
-}
+.cell-x,
+.cell-dot { display: none; }
 
 .sheet-foot {
   display: flex;
@@ -1495,6 +1445,8 @@ table.lsheet td {
   display: block;
 }
 
+.color-pop .cp-delete { color: var(--red); margin-top: 6px; }
+.color-pop .cp-delete[hidden] { display: none; }
 .color-pop .cp-title {
   font-size: 10px;
   letter-spacing: .14em;

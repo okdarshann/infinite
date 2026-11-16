@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Team Goals - Infinite</title>
   <meta name="description" content="Create or join a team, share goals, chat and cheer each other on.">
   <link rel="icon" href="../deserve.png" type="image/png">
-  <link rel="stylesheet" href="../static/css/style.css?v=36">
+  <link rel="stylesheet" href="../static/css/style.css?v=38">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -14,15 +14,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js" defer></script>
-  <script src="../static/js/auth.js?v=10" defer></script>
+  <script src="../static/js/native.js?v=1" defer></script>
+  <script src="../static/js/auth.js?v=12" defer></script>
   <script src="../static/js/doc-attrib.js?v=4" defer></script>
-  <script src="../static/js/team.js?v=12" defer></script>
+  <script src="../static/js/team.js?v=14" defer></script>
   <script src="../static/js/team-notify.js?v=4" defer></script>
-  <script src="../static/js/ai-chat.js?v=9" defer></script>
-  <script src="../static/js/tour.js?v=1" defer></script>
-  <link rel="stylesheet" href="../static/css/mobile.css?v=2">
-  <script src="../static/js/mobile-responsive.js?v=2" defer></script>
+  <link rel="stylesheet" href="../static/css/mobile.css?v=15">
+  <script src="../static/js/mobile-responsive.js?v=3" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -32,10 +30,10 @@
     </div>
     <nav class="side-nav">
       <a class="nav-item" href="../"><i class="fa-solid fa-house"></i><em>Overview</em></a>
-      <a class="nav-item" href="../calendar/"><i class="fa-solid fa-calendar-week"></i><em>Life Calendar</em></a>
-      <a class="nav-item" href="../notepad/"><i class="fa-solid fa-book"></i><em>Notepad &amp; Docs</em></a>
-      <a class="nav-item active" href="./"><i class="fa-solid fa-users"></i><em>Team Goals</em></a>
-        <a class="nav-item" href="../contact/"><i class="fa-solid fa-envelope"></i><em>Connect</em></a>
+      <a class="nav-item" href="../calendar/index.html"><i class="fa-solid fa-calendar-week"></i><em>Life Calendar</em></a>
+      <a class="nav-item" href="../notepad/index.html"><i class="fa-solid fa-book"></i><em>Notepad &amp; Docs</em></a>
+      <a class="nav-item" href="../lifesheet/index.html"><i class="fa-solid fa-table"></i><em>Life Sheet</em></a>
+      <a class="nav-item active" href="index.html"><i class="fa-solid fa-users"></i><em>Team Goals</em></a>
     </nav>
 
     <!-- My teams -->
@@ -58,7 +56,6 @@
   <div class="main-wrap">
     <div class="topbar">
       <span class="crumb">INFINITE &nbsp;›&nbsp; <b>TEAM GOALS</b></span>
-      <span class="clock-pill"><i class="fa-regular fa-clock"></i><span id="utc-clock">--:--:-- UTC</span></span>
       <div class="top-actions">
         <div id="auth-account-actions" class="auth-account-actions" hidden></div>
       </div>
@@ -72,8 +69,8 @@
           <div class="page-sub">WORK WITH FRIENDS · EVERYONE SEES PROGRESS IN REAL TIME</div>
         </div>
         <div class="head-actions">
-          <button type="button" id="create-team-btn" class="btn btn-green"><i class="fa-solid fa-plus"></i>Create team</button>
-          <button type="button" id="join-team-btn" class="btn"><i class="fa-solid fa-right-to-bracket"></i>Join with code</button>
+          <button type="button" id="create-team-btn" class="btn btn-green btn-icon" title="Create team" aria-label="Create team"><i class="fa-solid fa-plus"></i></button>
+          <button type="button" id="join-team-btn" class="btn btn-icon" title="Join with code" aria-label="Join with code"><i class="fa-solid fa-user-plus"></i></button>
         </div>
       </div>
 
@@ -99,12 +96,24 @@
         <i class="fa-solid fa-people-group"></i>
         <h2>No team yet</h2>
         <p>Create a team and invite friends with a 6-letter code, or join a friend's team with theirs.</p>
-        <p style="font-size:12.5px; color:var(--faint);">Use the <b style="color:var(--text);">Create team</b> or <b style="color:var(--text);">Join with code</b> buttons at the top right to get started.</p>
+        <p style="font-size:12.5px; color:var(--faint);">Tap <b style="color:var(--text);"><i class="fa-solid fa-plus"></i></b> to create a team or <b style="color:var(--text);"><i class="fa-solid fa-user-plus"></i></b> to join with a code, at the top right.</p>
+      </div>
+
+      <!-- Mobile: your teams list -->
+      <section class="team-picker" id="team-picker" aria-label="Your teams">
+        <div class="team-picker-label">YOUR TEAMS</div>
+        <div id="team-picker-list"></div>
+      </section>
+
+      <!-- Mobile: sub-page back bar -->
+      <div class="team-subbar" id="team-subbar">
+        <button type="button" id="team-sub-back" class="team-back-btn"><i class="fa-solid fa-chevron-left"></i><span id="team-sub-title">Goals</span></button>
       </div>
 
       <!-- Team content -->
       <div id="team-content" hidden>
         <div class="team-head">
+          <button type="button" id="team-back-btn" class="team-back-btn"><i class="fa-solid fa-chevron-left"></i>All teams</button>
           <div>
             <div class="team-name"><i class="fa-solid fa-users"></i><span id="team-name">Team</span></div>
             <div class="team-sub" id="team-sub">0 MEMBERS</div>
@@ -118,21 +127,31 @@
           </div>
         </div>
 
-        <div class="metrics" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));">
-          <div class="metric-card">
+        <div class="metrics team-metrics">
+          <div class="metric-card" role="button" tabindex="0" data-go="members">
             <div class="ml"><i class="fa-solid fa-users"></i>MEMBERS</div>
             <div class="mv" id="members-count">0</div>
-            <div class="ms">holding each other accountable</div>
+            <div class="ms">tap to see everyone</div>
           </div>
-          <div class="metric-card">
+          <div class="metric-card" role="button" tabindex="0" data-go="goals">
             <div class="ml"><i class="fa-solid fa-bullseye"></i>GOALS</div>
             <div class="mv amber" id="goals-count">0</div>
-            <div class="ms">team + personal, live sync</div>
+            <div class="ms">tap to open goals</div>
           </div>
-          <div class="metric-card">
-            <div class="ml"><i class="fa-solid fa-comments"></i>CHAT</div>
-            <div class="mv lav">LIVE</div>
-            <div class="ms">cheer each other on →</div>
+          <div class="metric-card" role="button" tabindex="0" data-go="chat">
+            <div class="ml"><i class="fa-solid fa-comments"></i>TEAM</div>
+            <div class="mv lav">CHAT</div>
+            <div class="ms">talk with your team →</div>
+          </div>
+          <div class="metric-card metric-mobile-only" role="button" tabindex="0" data-go="docs">
+            <div class="ml"><i class="fa-solid fa-file-lines"></i>DOCS</div>
+            <div class="mv" id="docs-tile-count">0</div>
+            <div class="ms">shared team docs</div>
+          </div>
+          <div class="metric-card metric-mobile-only" role="button" tabindex="0" data-go="rewards">
+            <div class="ml"><i class="fa-solid fa-trophy"></i>WINS</div>
+            <div class="mv amber"><i class="fa-solid fa-trophy"></i></div>
+            <div class="ms">celebrate together</div>
           </div>
         </div>
 
@@ -206,7 +225,9 @@
           <div id="rewards-list"><div class="empty-hint">Loading wins…</div></div>
         </div>
 
+        <div id="members-backdrop" class="members-backdrop"></div>
         <div id="tab-members" class="panel" hidden>
+          <div class="members-popup-head"><span>Members</span><button type="button" id="members-close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button></div>
           <div id="members-list"><div class="empty-hint">Loading members…</div></div>
         </div>
       </div>
@@ -263,7 +284,7 @@
       </form>
       <div class="auth-guest-confirm" id="auth-guest-confirm" hidden>
         <div class="auth-guest-icon"><i class="fa-solid fa-hard-drive"></i></div>
-        <p class="auth-guest-message">As a guest, your goals, notes, and calendar are saved only in this browser on this device. AI chat and Team features require an account. Sign in or create an account to use them.</p>
+        <p class="auth-guest-message">As a guest, your goals, notes, and calendar are saved only in this browser on this device. Team features require an account. Sign in or create an account to use them.</p>
         <div class="auth-guest-name-field">
           <label for="auth-guest-name">Name (optional)</label>
           <input id="auth-guest-name" type="text" autocomplete="name" placeholder="What should we call you?">
@@ -324,14 +345,6 @@
   <script>
     // Clock + user chip for this page (auth.js handles the account actions).
     (function () {
-      function tickClock() {
-        const n = new Date();
-        document.getElementById('utc-clock').textContent =
-          String(n.getUTCHours()).padStart(2, '0') + ':' + String(n.getUTCMinutes()).padStart(2, '0') + ':' +
-          String(n.getUTCSeconds()).padStart(2, '0') + ' UTC';
-      }
-      setInterval(tickClock, 1000); tickClock();
-
       function refreshUser() {
         const name = localStorage.getItem('life_user_name') ||
           (window.lifeIsShortUser && (window.lifeIsShortUser.displayName || window.lifeIsShortUser.email)) || 'Guest';

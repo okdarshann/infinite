@@ -96,10 +96,6 @@ function setAuthOverlayVisible(isVisible) {
   document.body.classList.toggle('auth-lock', isVisible);
   if (isVisible) {
     AuthPixels.start();
-    // Load the captcha only once somebody is actually looking at the sign-in page,
-    // so a signed-in visitor never pays for the script.
-    Turnstile.mount('auth-turnstile-main');
-    Turnstile.mount('auth-turnstile-reset');
   } else {
     AuthPixels.stop();
   }
@@ -142,10 +138,11 @@ function showPasswordReminder() {
 }
 
 function setAccountActions(user) {
+  const showGuestUi = !user && localStorage.getItem(LIFE_IS_SHORT_MODE_KEY) === 'guest';
   const guestNotice = document.getElementById('guest-mode-notice');
-  if (guestNotice) {
-    guestNotice.hidden = Boolean(user) || localStorage.getItem(LIFE_IS_SHORT_MODE_KEY) !== 'guest';
-  }
+  if (guestNotice) guestNotice.hidden = !showGuestUi;
+  const guestChip = document.getElementById('guest-mode-chip');
+  if (guestChip) guestChip.hidden = !showGuestUi;
 
   const actions = document.getElementById('auth-account-actions');
   if (!actions) return;
@@ -377,121 +374,14 @@ function hasPasswordProvider(user) {
 }
 
 /* ------------------------------------------------------------------
- * Cloudflare Turnstile — the captcha on the sign-in, sign-up and reset forms.
+ * Captcha removed with the AI backend.
  *
- * The browser never decides anything: it hands the token to the Worker, and the
- * Worker asks Cloudflare with the secret key it keeps. So editing the page, or
- * calling Firebase directly, still gets you nowhere.
+ * The Cloudflare Turnstile check used to be verified by the same Worker that
+ * served the AI chat. That Worker is gone, so the widget (and the network call
+ * that vouched for it) is gone too: accounts now rest on Firebase's own rate
+ * limits and email-enumeration protection. If you add a captcha later, mount it
+ * in setAuthOverlayVisible() and check the token before calling Firebase.
  * ------------------------------------------------------------------ */
-const TURNSTILE_SITE_KEY = '0x4AAAAAAFOHl2sSauip7Jns';
-/* Same Worker that serves /chat (see ai/index.html). It holds TURNSTILE_SECRET. */
-const AI_WORKER_BASE = 'https://infinite-ai.darshan-infinite-ai.workers.dev';
-const TURNSTILE_SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-
-const Turnstile = (() => {
-  const widgets = new Map();          // container id -> widgetId
-  const tokens = new Map();           // container id -> token
-  let loading = null;
-  let broken = false;
-
-  function load() {
-    if (window.turnstile) return Promise.resolve(window.turnstile);
-    if (loading) return loading;
-    loading = new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = TURNSTILE_SCRIPT;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => (window.turnstile ? resolve(window.turnstile) : reject(new Error('no turnstile')));
-      script.onerror = () => reject(new Error('turnstile script blocked'));
-      document.head.appendChild(script);
-    }).catch((error) => { loading = null; broken = true; throw error; });
-    return loading;
-  }
-
-  /* Render into one container. Called again after the page is rebuilt, and safe to
-     call twice for the same container: the old widget is removed first. */
-  async function mount(containerId) {
-    const host = document.getElementById(containerId);
-    if (!host || widgets.has(containerId)) return;
-    try {
-      const api = await load();
-      if (!document.getElementById(containerId)) return;      // page changed while loading
-      const widgetId = api.render(host, {
-        sitekey: TURNSTILE_SITE_KEY,
-        theme: 'dark',
-        size: 'flexible',
-        callback: (token) => tokens.set(containerId, token),
-        'expired-callback': () => tokens.delete(containerId),
-        'error-callback': () => tokens.delete(containerId),
-      });
-      if (widgetId) widgets.set(containerId, widgetId);
-    } catch (error) {
-      showCaptchaProblem(containerId);
-    }
-  }
-
-  function showCaptchaProblem(containerId) {
-    const host = document.getElementById(containerId);
-    if (!host) return;
-    host.replaceChildren();
-    const note = document.createElement('span');
-    note.className = 'ap-turnstile-error';
-    note.textContent = 'The captcha could not load. Check your connection, then reload this page.';
-    host.appendChild(note);
-  }
-
-  /* A token is good once. Clear it after every attempt, solved or not. */
-  function reset(containerId) {
-    const widgetId = widgets.get(containerId);
-    tokens.delete(containerId);
-    if (!widgetId || !window.turnstile) return;
-    try { window.turnstile.reset(widgetId); } catch (e) { /* the widget is gone; nothing to clear */ }
-  }
-
-  function tokenFor(containerId) {
-    return tokens.get(containerId) || '';
-  }
-
-  async function verify(token) {
-    const res = await fetch(`${AI_WORKER_BASE}/verify-turnstile`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token }),
-    });
-    let data = {};
-    try { data = await res.json(); } catch (e) { /* the Worker sent nothing readable */ }
-    return { ok: res.ok && data.success === true, error: data.error || '' };
-  }
-
-  return { mount, reset, tokenFor, verify, isBroken: () => broken };
-})();
-
-/* Called from a form submit. Returns true when the person may carry on to Firebase. */
-async function passCaptcha(containerId) {
-  if (!TURNSTILE_SITE_KEY) return true;                    // no widget configured: nothing to check
-  const token = Turnstile.tokenFor(containerId);
-  if (!token) {
-    setAuthError(Turnstile.isBroken()
-      ? 'The captcha could not load. Check your connection, then reload this page.'
-      : 'Finish the captcha first.');
-    return false;
-  }
-  let verdict;
-  try {
-    verdict = await Turnstile.verify(token);
-  } catch (error) {
-    setAuthError('The captcha could not be checked. Check your connection and try again.');
-    Turnstile.reset(containerId);
-    return false;
-  }
-  Turnstile.reset(containerId);                            // one token, one try
-  if (!verdict.ok) {
-    setAuthError(verdict.error || 'The captcha could not be verified. Try again.');
-    return false;
-  }
-  return true;
-}
 
 function ensureAuthPageStyles() {
   if (document.getElementById('auth-page-styles')) return;
@@ -535,10 +425,6 @@ function ensureAuthPageStyles() {
     .ap-brand { display: flex; align-items: center; justify-content: center; gap: .55rem; }
     .ap-brand-logo { width: 28px; height: 28px; border-radius: 8px; object-fit: cover; }
     .ap-input:focus { border-color: var(--lav); }
-    .ap-turnstile { display: flex; justify-content: center; min-height: 65px; }
-    .ap-turnstile:empty { display: none; }
-    .ap-turnstile iframe { max-width: 100%; }
-    .ap-turnstile-error { color: #ff8f8f; font-size: .8rem; text-align: center; }
     .ap-switch { padding: .2rem 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: .85rem; text-align: center; cursor: pointer; }
     .ap-switch span { color: var(--lav); font-weight: 700; }
     .ap-note { padding: 1rem 1.1rem; border: 1px solid rgba(61, 220, 151, .28); border-radius: 14px; background: linear-gradient(100deg, var(--green-soft), var(--surface2) 75%); }
@@ -601,7 +487,6 @@ function buildAuthPage() {
               </div>
               <input class="ap-input" id="auth-password" name="password" type="password" autocomplete="current-password" minlength="6" placeholder="••••••••" required>
             </div>
-            <div class="ap-turnstile" id="auth-turnstile-main"></div>
             <button type="submit" class="ap-btn ap-btn-primary" id="auth-submit">Sign In</button>
             <button type="button" class="ap-switch" id="auth-mode-toggle">Don't have an account? <span>Sign up</span></button>
           </form>
@@ -612,7 +497,6 @@ function buildAuthPage() {
             <label for="auth-reset-email">Email</label>
             <input class="ap-input" id="auth-reset-email" type="email" autocomplete="email" placeholder="you@example.com" required>
           </div>
-          <div class="ap-turnstile" id="auth-turnstile-reset"></div>
           <button type="submit" class="ap-btn ap-btn-primary" id="auth-reset-submit">Send reset link</button>
           <button type="button" class="ap-btn ap-btn-ghost" id="auth-reset-back">Back to sign in</button>
         </form>
@@ -622,7 +506,7 @@ function buildAuthPage() {
             <div class="ap-note-head"><i class="fa-solid fa-user-lock"></i><strong>Guest mode</strong></div>
             <ul class="ap-note-list">
               <li><i class="fa-solid fa-hard-drive"></i><span>Your goals, notes and calendar are saved only in this browser, on this device.</span></li>
-              <li><i class="fa-solid fa-lock"></i><span>AI chat and Team features need an account. Sign in or create one to use them.</span></li>
+              <li><i class="fa-solid fa-lock"></i><span>Team features need an account. Sign in or create one to use them.</span></li>
             </ul>
           </div>
           <div class="ap-field">
@@ -807,9 +691,6 @@ async function sendPasswordReset(event) {
   const submit = document.getElementById('auth-reset-submit');
   submit.disabled = true;
   try {
-    // The captcha first: nobody should learn whether an address has an account by
-    // asking this form for a reset mail.
-    if (!(await passCaptcha('auth-turnstile-reset'))) return;
     await lifeIsShortAuth.sendPasswordResetEmail(email);
     setAuthStatus('Reset link sent. Check your inbox (and spam folder).');
   } catch (error) {
@@ -839,6 +720,12 @@ function setupAuthUi() {
   document.getElementById('guest-mode-signin')?.addEventListener('click', () => {
     setAuthOverlayVisible(true);
     showAuthTab('signin');
+  });
+  ['guest-mode-signin', 'guest-mode-chip'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('click', () => {
+      setAuthOverlayVisible(true);
+      showAuthTab('signin');
+    });
   });
   document.querySelectorAll('[data-auth-tab]').forEach((button) => {
     button.addEventListener('click', () => showAuthTab(button.dataset.authTab));
@@ -887,9 +774,6 @@ function setupAuthUi() {
     const submit = document.getElementById('auth-submit');
     submit.disabled = true;
     try {
-      // Sign in, sign up and password reset all sit behind this one check, so a bot
-      // cannot burn the Firebase sign-up quota from a script.
-      if (!(await passCaptcha('auth-turnstile-main'))) return;
       if (mode === 'signup') {
         const credential = await lifeIsShortAuth.createUserWithEmailAndPassword(email, password);
         await credential.user.updateProfile({ displayName: name });
@@ -1099,6 +983,8 @@ function ensureProfileStyles() {
     .profile-section { display: grid; gap: .5rem; padding-top: .8rem; border-top: 1px solid var(--line-soft); }
     .profile-section-title { font-size: .82rem; font-weight: 700; }
     .profile-section[hidden], .profile-email[hidden], .profile-note[hidden] { display: none !important; }
+    .profile-logout-btn { color: var(--red); border-color: var(--red); }
+    .profile-logout-btn:hover { background: var(--red); color: #fff; }
     .profile-crop { display: grid; gap: .7rem; justify-items: center; text-align: center; }
     .profile-crop[hidden] { display: none !important; }
     .profile-crop h2 { margin: 0; font-size: 1.15rem; }
@@ -1144,6 +1030,9 @@ function buildProfileDialog() {
       <div class="profile-section" id="profile-password-section">
         <div class="profile-section-title">Password</div>
         <button type="button" class="auth-inline-button" id="profile-password-btn">Change password</button>
+      </div>
+      <div class="profile-section" id="profile-logout-section" hidden>
+        <button type="button" class="auth-inline-button profile-logout-btn" id="profile-logout-btn">Log out</button>
       </div>
       <p class="auth-error" id="profile-error" role="alert"></p>
       <button type="submit" class="auth-button auth-button-primary" id="profile-save">Save changes</button>
@@ -1275,6 +1164,17 @@ function buildProfileDialog() {
   q('profile-name').addEventListener('input', refreshPreview);
   q('profile-cancel').addEventListener('click', () => dialog.close());
   q('profile-password-btn').addEventListener('click', () => { dialog.close(); showPasswordForm(); });
+  q('profile-logout-btn').addEventListener('click', async () => {
+    const btn = q('profile-logout-btn');
+    btn.disabled = true;
+    try {
+      await lifeIsShortAuth.signOut();
+      dialog.close();
+    } catch (error) {
+      btn.disabled = false;
+      q('profile-error').textContent = readableAuthError(error);
+    }
+  });
   let pressStartedOnBackdrop = false;
   dialog.addEventListener('pointerdown', (e) => { pressStartedOnBackdrop = e.target === dialog; });
   dialog.addEventListener('click', (e) => { if (e.target === dialog && pressStartedOnBackdrop) dialog.close(); });   // click on the backdrop
@@ -1347,6 +1247,8 @@ function openProfileDialog() {
   email.hidden = !user;
   document.getElementById('profile-password-section').hidden = !hasPasswordProvider(user);
   document.getElementById('profile-guest-note').hidden = !!user;
+  document.getElementById('profile-logout-section').hidden = !user;
+  document.getElementById('profile-logout-btn').disabled = false;
   dialog._showForm();
   dialog._refreshPreview();
   if (!dialog.open) dialog.showModal();

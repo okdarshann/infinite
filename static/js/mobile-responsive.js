@@ -12,6 +12,7 @@
       /* The Inspire Feed is a dedicated destination on phones, not another
          section appended to the long Overview dashboard. */
       .mobile-inspire-nav-item,
+      .mobile-goals-nav-item,
       .mobile-sheet-nav-item {
         display: none;
       }
@@ -28,8 +29,26 @@
         }
 
         .mobile-inspire-nav-item,
+        .mobile-goals-nav-item,
         .mobile-sheet-nav-item {
           display: flex;
+        }
+
+        /* Life Goals: hidden from the Overview on phones, shown alone from the menu */
+        .goals-section {
+          display: none;
+        }
+
+        body.mobile-goals-view .main-wrap .page > :not(.goals-section) {
+          display: none !important;
+        }
+
+        body.mobile-goals-view .goals-section {
+          display: block;
+        }
+
+        body.mobile-goals-view .main-wrap .page {
+          padding-top: 16px;
         }
 
         body.mobile-inspire-view .page-layout > .page {
@@ -326,9 +345,99 @@
     var media = window.matchMedia('(max-width: 860px)');
     var inspireRail = document.getElementById('inspire-rail');
     var inspireItem = null;
-    var sheetPanel = document.querySelector('.sheet-panel');
+    var goalsPanel = document.getElementById('life-goals');
+    var goalsItem = null;
+    var sheetPanel = null; /* Life Sheet now has its own page */
     var sheetItem = null;
     var nav = sidebar.querySelector('.side-nav');
+
+    /*
+     * Account actions (Sign up / Change password / Log out): on phones they are
+     * a small popover behind an icon in the guest member box; on larger screens
+     * they go back to the top bar.
+     */
+    var account = document.getElementById('auth-account-actions');
+    var accountHome = account ? account.parentNode : null;
+    var chip = sidebar.querySelector('.user-chip');
+    var chipMore = null;
+
+    /* The icon that opens the account popover, in the chip's right corner. */
+    function ensureChipMore() {
+      if (!chip || chipMore) return;
+
+      chipMore = document.createElement('button');
+      chipMore.type = 'button';
+      chipMore.className = 'user-chip-more';
+      chipMore.setAttribute('aria-label', 'Account options');
+      chipMore.setAttribute('aria-expanded', 'false');
+      chipMore.innerHTML =
+        '<i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>';
+
+      chip.appendChild(chipMore);
+
+      chipMore.addEventListener('click', function (event) {
+        event.stopPropagation();
+
+        if (!account || account.hidden) return;
+
+        var open = !chip.classList.contains('account-open');
+        chip.classList.toggle('account-open', open);
+        chipMore.setAttribute('aria-expanded', String(open));
+      });
+    }
+
+    function closeChipAccount() {
+      if (!chip || !chip.classList.contains('account-open')) return;
+
+      chip.classList.remove('account-open');
+      if (chipMore) chipMore.setAttribute('aria-expanded', 'false');
+    }
+
+    function placeAccount() {
+      if (!account) return;
+
+      if (media.matches) {
+        ensureChipMore();
+
+        if (chip) {
+          if (account.parentNode !== chip) {
+            chip.insertBefore(account, chipMore || null);
+          }
+        } else if (account.parentNode !== sidebar) {
+          var foot = sidebar.querySelector('.side-foot');
+          sidebar.insertBefore(
+            account,
+            foot && foot.parentNode === sidebar ? foot : null
+          );
+        }
+      } else {
+        closeChipAccount();
+
+        if (accountHome && account.parentNode !== accountHome) {
+          accountHome.insertBefore(account, accountHome.firstChild);
+        }
+      }
+    }
+
+    placeAccount();
+
+    /* Close the popover and the drawer after tapping Sign up / Log out. */
+    if (account) {
+      account.addEventListener('click', function (event) {
+        if (event.target.closest('button')) {
+          closeChipAccount();
+          setOpen(false);
+        }
+      });
+    }
+
+    /* Tapping anywhere else closes the account popover. */
+    document.addEventListener('click', function (event) {
+      if (!chip || !chip.classList.contains('account-open')) return;
+      if (event.target.closest && event.target.closest('.user-chip')) return;
+
+      closeChipAccount();
+    });
 
     var originalActiveItems = Array.prototype.slice.call(
       sidebar.querySelectorAll('.nav-item.active')
@@ -357,6 +466,30 @@
           overviewItem.insertAdjacentElement('afterend', inspireItem);
         } else {
           nav.appendChild(inspireItem);
+        }
+      }
+    }
+
+    /* Life Goals: the My Goals section gets its own menu item on phones. */
+    if (goalsPanel && nav) {
+      goalsItem = nav.querySelector('.mobile-goals-nav-item');
+
+      if (!goalsItem) {
+        goalsItem = document.createElement('a');
+        goalsItem.className = 'nav-item mobile-goals-nav-item';
+        goalsItem.href = '#life-goals';
+        goalsItem.innerHTML =
+          '<i class="fa-solid fa-bullseye" aria-hidden="true"></i>' +
+          '<em>Life Goals</em>';
+
+        var goalsAnchor = nav.querySelector(
+          '.nav-item[href="./"], .nav-item[href="/"]'
+        );
+
+        if (goalsAnchor && goalsAnchor.parentNode === nav) {
+          goalsAnchor.insertAdjacentElement('afterend', goalsItem);
+        } else {
+          nav.appendChild(goalsItem);
         }
       }
     }
@@ -399,6 +532,8 @@
 
       document.body.classList.toggle('mobile-nav-open', shouldOpen);
 
+      if (!shouldOpen) closeChipAccount();
+
       button.setAttribute('aria-expanded', String(shouldOpen));
       button.setAttribute(
         'aria-label',
@@ -412,29 +547,26 @@
       overlay.setAttribute('aria-hidden', String(!shouldOpen));
     }
 
-    function setInspireView(show) {
-      var shouldShow = Boolean(
-        show && media.matches && inspireRail && inspireItem
-      );
+    /* view: 'inspire' | 'goals' | 'sheet' | null (null = normal Overview) */
+    function setView(view) {
+      var items = { inspire: inspireItem, goals: goalsItem, sheet: sheetItem };
+      var names = { inspire: 'INSPIRE FEED', goals: 'LIFE GOALS', sheet: 'LIFE SHEET' };
+      var active = view ? items[view] : null;
+      var shouldShow = Boolean(active && media.matches);
 
-      document.body.classList.toggle(
-        'mobile-inspire-view',
-        shouldShow
-      );
-      document.body.classList.toggle(
-        'mobile-sheet-view',
-        false
-      );
+      document.body.classList.toggle('mobile-inspire-view', shouldShow && view === 'inspire');
+      document.body.classList.toggle('mobile-goals-view', shouldShow && view === 'goals');
+      document.body.classList.toggle('mobile-sheet-view', shouldShow && view === 'sheet');
 
       sidebar.querySelectorAll('.nav-item').forEach(function (item) {
         item.classList.toggle(
           'active',
           shouldShow
-            ? item === inspireItem
+            ? item === active
             : originalActiveItems.indexOf(item) !== -1
         );
 
-        if (shouldShow && item === inspireItem) {
+        if (shouldShow && item === active) {
           item.setAttribute('aria-current', 'page');
         } else {
           item.removeAttribute('aria-current');
@@ -443,45 +575,11 @@
 
       if (crumb) {
         crumb.innerHTML = shouldShow
-          ? 'INFINITE &nbsp;›&nbsp; <b>INSPIRE FEED</b>'
+          ? 'INFINITE &nbsp;›&nbsp; <b>' + names[view] + '</b>'
           : originalCrumb;
       }
-    }
 
-    function setSheetView(show) {
-      var shouldShow = Boolean(
-        show && media.matches && sheetPanel && sheetItem
-      );
-
-      document.body.classList.toggle(
-        'mobile-sheet-view',
-        shouldShow
-      );
-      document.body.classList.toggle(
-        'mobile-inspire-view',
-        false
-      );
-
-      sidebar.querySelectorAll('.nav-item').forEach(function (item) {
-        item.classList.toggle(
-          'active',
-          shouldShow
-            ? item === sheetItem
-            : originalActiveItems.indexOf(item) !== -1
-        );
-
-        if (shouldShow && item === sheetItem) {
-          item.setAttribute('aria-current', 'page');
-        } else {
-          item.removeAttribute('aria-current');
-        }
-      });
-
-      if (crumb) {
-        crumb.innerHTML = shouldShow
-          ? 'INFINITE &nbsp;›&nbsp; <b>LIFE SHEET</b>'
-          : originalCrumb;
-      }
+      if (shouldShow) window.scrollTo(0, 0);
     }
 
     /* Hamburger button opens and closes the mobile drawer. */
@@ -494,35 +592,25 @@
       setOpen(false);
     });
 
-    /*
-     * Open the standalone Inspire Feed view only after the user selects
-     * Inspire Feed from the hamburger navigation.
-     */
-    if (inspireItem) {
-      inspireItem.addEventListener('click', function (event) {
+    /* Inspire Feed / Life Goals / Life Sheet open their own phone view. */
+    [
+      [inspireItem, 'inspire'],
+      [goalsItem, 'goals'],
+      [sheetItem, 'sheet']
+    ].forEach(function (pair) {
+      if (!pair[0]) return;
+
+      pair[0].addEventListener('click', function (event) {
         if (!media.matches) return;
 
         event.preventDefault();
 
-        setInspireView(true);
+        setView(pair[1]);
         setOpen(false);
       });
-    }
+    });
 
-    if (sheetItem) {
-      sheetItem.addEventListener('click', function (event) {
-        if (!media.matches) return;
-
-        event.preventDefault();
-
-        setSheetView(true);
-        setOpen(false);
-      });
-    }
-
-    /*
-     * Selecting any other navigation item returns to the normal page.
-     */
+    /* Any other navigation item returns to the normal page. */
     sidebar.addEventListener('click', function (event) {
       var target = event.target;
 
@@ -532,30 +620,28 @@
 
       if (!item) return;
 
-      if (item !== inspireItem) {
-        setInspireView(false);
-      }
-
-      if (item !== sheetItem) {
-        setSheetView(false);
+      if (item !== inspireItem && item !== goalsItem && item !== sheetItem) {
+        setView(null);
       }
 
       setOpen(false);
     });
 
-    /* Escape closes the mobile navigation drawer. */
+    /* Escape closes the account popover and the mobile navigation drawer. */
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') {
+        closeChipAccount();
         setOpen(false);
       }
     });
 
     /* Restore desktop layout when leaving the mobile breakpoint. */
     function onMediaChange() {
+      placeAccount();
+
       if (!media.matches) {
         setOpen(false);
-        setInspireView(false);
-        setSheetView(false);
+        setView(null);
       }
     }
 

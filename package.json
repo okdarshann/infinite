@@ -2,11 +2,29 @@
   "name": "infinite",
   "version": "1.0.0",
   "private": true,
-  "description": "Infinite - a static site with shared team docs. Only the test harness needs Node; the site itself is plain HTML/CSS/JS on GitHub Pages.",
+  "description": "Infinite - a goal and progress tracker. Plain HTML/CSS/JS at the repo root, wrapped as a native Android and iOS app with Capacitor.",
   "scripts": {
-    "test": "node tests/docs.test.js && node tests/notepad.test.js"
+    "test": "node tests/docs.test.js && node tests/notepad.test.js",
+    "mobile:build": "node scripts/build-mobile.js",
+    "mobile:apk": "node scripts/build-apk.js",
+    "mobile:icons": "node scripts/build-icons.js && capacitor-assets generate --android --ios --iconBackgroundColor '#0a0f16' --splashBackgroundColor '#0a0f16'",
+    "mobile:sync": "npm run mobile:build && cap sync",
+    "mobile:android": "npm run mobile:sync && cap open android",
+    "mobile:ios": "npm run mobile:sync && cap open ios",
+    "mobile:run:android": "npm run mobile:sync && cap run android",
+    "mobile:run:ios": "npm run mobile:sync && cap run ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4"
   },
   "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
+    "@capacitor/cli": "^8.6.0",
     "jsdom": "^26.0.0"
   }
 }

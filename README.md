@@ -2,9 +2,11 @@
 
 **We deserve better.**
 
-Infinite is a free goal and progress tracker that runs entirely in the browser. Track your year, month and week, set daily to yearly goals, plan on a life calendar, take notes, work with friends in teams, and get motivational stories and songs picked for your goals.
+Infinite is a free goal and progress tracker. It runs in the browser and installs as a native Android and iOS app
+from the same code. Track your year, month and week, set daily to yearly goals, plan on a life calendar, take notes,
+work with friends in teams, and get motivational stories and songs picked for your goals.
 
-Live site: [okdarshann.github.io/infinite/](https://okdarshann.github.io/infinite/)            
+Live site: okdarshann.github.io/infinite/
 APK Downlaod: https://okdarshann.github.io/infinite-apk-site/
 
 > **Credit**: Inspired by [twi-exe/life-is-short](https://github.com/twi-exe/life-is-short). Credit to the original creator for the core concept 
@@ -21,18 +23,17 @@ APK Downlaod: https://okdarshann.github.io/infinite-apk-site/
   delete what they sent, and every reply leaves from your own mail app (`mailto:`) -- there is no inbox to answer from.
 - **Private inbox** (`admin/`): every message in one list with All/Unread filters and search. Reachable only by the
   account that owns the site, and only after a key you set.
-- **Infinite AI**: a coaching companion that reads your goals, notes and saved links, and can *propose* changes to
-  them. Nothing is ever written without your confirmation.
-- **Accounts and cloud sync**: email login with Firebase, or use it as a guest without an account. Sign-in, sign-up
-  and password reset sit behind a Cloudflare Turnstile captcha, checked by the Worker -- see
-  [Captcha setup](#captcha-setup).
+- **Android and iOS apps**: the same pages packaged with Capacitor, so the tracker installs from a store and opens
+  without a browser. Guest data and cloud sync behave exactly as they do on the web.
+- **Accounts and cloud sync**: email login with Firebase, or use it as a guest without an account. Google sign-in is
+  offered on the web and hidden in the apps -- see [Sign-in protection](#sign-in-protection).
 - **Light and dark mode**, responsive on desktop and mobile.
 
 ## Tech
 
 Plain HTML, CSS and JavaScript. Firebase Authentication and Firestore for accounts and sync. GitHub Pages for hosting
-and GitHub Actions for the Inspire Feed. The AI runs on a Cloudflare Worker (free tier) so the project can stay on the
-Firebase free plan. No build step.
+and GitHub Actions for the Inspire Feed. Capacitor packages the same files into the Android and iOS apps. The site
+itself needs no build step.
 
 ## Run locally
 
@@ -49,6 +50,94 @@ Then visit http://127.0.0.1:5500
 1. Push the code to the `main` branch.
 2. In **Settings > Pages**, choose **Deploy from a branch**, then `main` and `/ (root)`.
 3. Every push to `main` is published automatically at `https://<username>.github.io/<repo>/`.
+
+## Mobile app (Android and iOS)
+
+The app is this website, packaged with [Capacitor](https://capacitorjs.com). No page is rewritten for mobile: the
+files in the app bundle are the same ones GitHub Pages serves, copied into `www/` by `scripts/build-mobile.js`.
+
+```bash
+npm install              # once
+npm run mobile:apk       # build the Android APK into dist/
+npm run mobile:sync      # build www/ and copy it into android/ and ios/
+npm run mobile:android   # open Android Studio
+npm run mobile:ios       # open Xcode (macOS only)
+npm run mobile:run:android   # build and install on a connected device
+```
+
+`www/` is generated and gitignored: delete it whenever you like, `npm run mobile:sync` brings it back. Run the sync
+after every change to a page, a style or a script, or the app keeps the old copy.
+
+Requirements: JDK 17 or newer and the Android SDK for Android; macOS with Xcode 16+ for iOS. `npm run
+mobile:icons` regenerates the launcher icon and splash screens from `deserve.png` when the artwork changes.
+
+### The APK in `dist/`
+
+`dist/Infinite-1.0-android-debug.apk` is a built, ready-to-install Android app: the whole site in the repo, packaged
+and signed. It needs no Android Studio, no SDK and no build step to use. Copy it to a phone and open it, or install it
+over USB:
+
+```bash
+adb install -r dist/Infinite-1.0-android-debug.apk
+```
+
+Opened on the phone itself, the file asks to allow "install unknown apps" for the app you opened it from -- allow it
+once and Infinite installs like anything from the store. It runs on Android 7.0 (API 24) and newer, which is every
+phone still receiving updates.
+
+It is a **debug** build, and that is what makes it installable with nothing else set up: it is signed with the
+standard Android debug key. That signature is enough for a phone and not enough for Play Store, which will not take
+the file, and it means no other build can ever update this one in place. Rebuilding is one command, and it re-derives
+`www/` from the site first so the APK can never be a stale copy of a page you have since edited:
+
+```bash
+npm run mobile:apk       # writes dist/Infinite-<versionName>-android-debug.apk
+```
+
+For a release build, make a keystore and hand it to Gradle. The keystore is yours and stays out of the repo, along
+with every `*.jks` -- see [Not in this repo](#not-in-this-repo):
+
+```bash
+keytool -genkeypair -v -keystore android/keystore/infinite-release.jks \
+  -alias infinite -keyalg RSA -keysize 2048 -validity 10000
+cd android
+./gradlew assembleRelease \
+  -Pandroid.injected.signing.store.file="$PWD/keystore/infinite-release.jks" \
+  -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+  -Pandroid.injected.signing.key.alias=infinite \
+  -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+```
+
+Keep that file. Android only installs an update signed with the same key, so losing it means every future release
+starts with uninstalling the old app.
+
+### Why there is no iOS file in `dist/`
+
+An iPhone cannot run an APK -- the two formats are not interchangeable, and no conversion exists. The iOS app is the
+same code already in `ios/`, but it becomes an `.ipa` only on macOS, where Xcode signs it with an Apple certificate:
+
+```bash
+npm run mobile:sync   # copy the site into ios/
+npm run mobile:ios    # Xcode: pick your team, then Product > Archive
+```
+
+That archive step cannot be run on Linux or Windows, so no `.ipa` is committed here. To get the app onto an iPhone
+without a paid account, connect the device and use **Product > Run** in Xcode instead of Archive: it installs
+straight to that phone with a free personal team, and the signature lasts seven days before Xcode has to sign it
+again.
+
+What differs inside the app, and why:
+
+- **Email and password sign-in only.** Google sign-in opens a popup, which an embedded WebView cannot host, so the
+  button and its divider are hidden by the `.native-app` rules in `static/css/mobile.css`.
+- **External links leave the app.** YouTube videos, `mailto:` and `tel:` links are handed to the system browser or
+  mail app by `static/js/native.js`.
+- **The back gesture walks the page history** and leaves the app from the dashboard.
+- **The dashboard needs no connection**; accounts and sync do, because the Firebase SDK and your data live online.
+- **The developer inbox ships too** (`admin/`), behind exactly the same Firebase rules and developer key.
+
+Before publishing, change `appId` in `capacitor.config.json`, run `npx cap sync`, then set your version and signing
+in Android Studio and Xcode.
 
 ## Firebase setup
 
@@ -417,66 +506,45 @@ The feed is a static file (`static/data/news.json`) refreshed every 6 hours by a
 
 Stories come from public RSS feeds. Songs are 30-second previews from the iTunes Search API. Everything used is free.
 
-## Captcha setup
+## Sign-in protection
 
-Sign-in, sign-up and password reset are behind [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/),
-the free captcha. Two keys, and they never sit in the same place:
+The sign-in, sign-up and reset forms no longer carry a captcha. They used to sit behind Cloudflare Turnstile, checked
+by the same Worker that served the AI chat; the widget went when that backend did. What is left is Firebase's own
+protection:
 
-| Key | Where it lives | Why |
-| --- | --- | --- |
-| **site key** | `TURNSTILE_SITE_KEY` in `static/js/auth.js` | public by design: the browser must render the widget |
-| **secret key** | the Worker, as `TURNSTILE_SECRET` | never sent anywhere near a browser |
+- turn on **email enumeration protection** in **Authentication > Settings**, so a wrong password cannot be told apart
+  from an address that has no account;
+- register the web app under **Firebase > App Check** and enforce it on Authentication, so a script cannot skip the
+  page and call Firebase's API directly;
+- Firebase's rate limits are the last line, and the free plan stops there instead of billing you.
 
-1. In the Cloudflare dashboard open **Turnstile**, add a widget in **Managed** mode, and list your hostnames
-   (`<username>.github.io`, plus `localhost` if you test locally).
-2. Put the site key in `static/js/auth.js`, then store the secret key on the Worker:
-
-   ```bash
-   cd ai-worker
-   npx wrangler secret put TURNSTILE_SECRET
-   npx wrangler deploy
-   ```
-
-The browser never decides whether a person is real. It hands the token to `POST /verify-turnstile` on the AI Worker,
-and the Worker asks Cloudflare with the secret key. So editing the page, or calling Firebase directly from a script,
-still gets nowhere. That route needs no Firebase token -- it runs *before* sign-in -- so it is guarded by the same
-`ALLOWED_ORIGINS` list plus a per-IP cap, and it fails **closed**: if Cloudflare cannot be reached, nobody gets in.
-
-Three details worth keeping if you edit this:
-
-- A Turnstile token is good **once**. The widget is reset after every attempt, so a failed password cannot be replayed.
-- The **Google** button skips the captcha on purpose: Google already checks for bots, and a second challenge in front
-  of a one-click sign-in is a wall, not a door.
-- **Guest mode** skips it too -- no account is created, so there is nothing to burn.
-
-This is the first half of bot defence only. For the second half, register the web app under **Firebase > App Check**
-and enforce it on Authentication: otherwise a bot can skip your page entirely and call Firebase's API directly.
-Turn on **email enumeration protection** in Authentication > Settings at the same time, so a wrong password cannot be
-told apart from an address that has no account.
-
-Cloudflare's test keys (`1x00000000000000000000AA` always passes, `2x00000000000000000000AB` always fails) are useful
-on localhost. The site ships with the real key, so check it on the live site -- a test key would let every bot through.
+If you wire a captcha back in, the place to do it is `setAuthOverlayVisible()` and the two submit handlers in
+`static/js/auth.js`. Keep the secret on a server: a check the browser can skip is decoration.
 
 ## Project structure
 
 ```
 ├── index.html            Dashboard
+├── calendar.html         Legacy redirect to calendar/index.html
 ├── calendar/             Life calendar
 ├── notepad/              Notes and docs
 ├── team/                 Team goals, chat and rewards
 ├── contact/              Connect page -- the form and the sender's own messages
 ├── admin/                Private inbox of every message (owner + key only)
-├── ai/                   Infinite AI workspace
-├── ai-worker/            Free Cloudflare Worker backend for the AI
-├── functions/            Alternative Gemini backend (needs Blaze, not deployed)
 ├── static/
-│   ├── css/              Styles
-│   ├── js/               auth, dashboard, team, notes, doc attribution + access control,
-│   │                     inspire feed, AI widget, developer key, contact + admin inbox
+│   ├── css/              Styles, including the .native-* rules for the app shell
+│   ├── js/               auth, native shell, dashboard, team, notes, doc attribution + access control,
+│   │                     inspire feed, developer key, contact + admin inbox
 │   └── data/news.json    Inspire Feed data (auto-generated)
+├── android/              Capacitor Android project (Gradle) -- the Play Store build
+├── ios/                  Capacitor iOS project (Xcode) -- the App Store build
+├── assets/               Icon and splash sources for scripts/build-icons.js
+├── capacitor.config.json App id, app name, webDir and native settings
+├── www/                  generated app bundle copied into both platforms (gitignored)
+├── dist/                 ready-built Android APK (npm run mobile:apk)
+├── scripts/              build-mobile.js, build-apk.js, build-icons.js, fetch-news.js
 ├── tests/                Docs ACL/attribution and Notepad tests (npm test)
 ├── firestore.rules       Firestore security rules -- the half of the lock the browser cannot bypass
-├── scripts/fetch-news.js Feed builder run by GitHub Actions
 ├── .github/workflows/    Scheduled feed update
 ├── robots.txt
 ├── sitemap.xml
@@ -490,11 +558,8 @@ Kept out on purpose, so a fork cannot walk into the live project:
 | Missing | Where it lives instead |
 | --- | --- |
 | the admin email address | in `firestore.rules.deploy` (gitignored) and, unavoidably, in the site's JavaScript |
-| `HF_TOKEN` (AI provider) | `npx wrangler secret put HF_TOKEN` -- a Worker secret |
-| `TURNSTILE_SECRET` (captcha) | `npx wrangler secret put TURNSTILE_SECRET` -- a Worker secret |
 | `GEMINI_API_KEY` | a GitHub Actions secret, for the feed only |
-| `ai-worker/wrangler.toml` | gitignored; `wrangler.example.toml` shows the shape |
-| the deployed Worker URL | set in `ai/index.html` for your own deployment |
+| native signing keys | your own keystore (`android/`) and Apple certificates (`ios/`) |
 
 The Firebase Web API key is *not* on that list, and cannot be: it ships in `static/js/auth.js` to every visitor.
 It identifies the project, it does not grant access -- the rules decide that.

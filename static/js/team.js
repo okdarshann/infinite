@@ -224,7 +224,9 @@
           if (doc.id === currentTeamId) stillExists = true;
           const btn = document.createElement('button');
           btn.className = 'team-item' + (doc.id === currentTeamId ? ' active' : '');
-          btn.innerHTML = `<strong>${escapeHtml(team.name)}</strong><span>${(team.memberIds || []).length} member${(team.memberIds || []).length === 1 ? '' : 's'}</span>`;
+          const memberCount = (team.memberIds || []).length;
+          btn.innerHTML = `<strong>${escapeHtml(team.name)}</strong><span>${memberCount} member${memberCount === 1 ? '' : 's'}</span>` +
+            `<span class="team-code" role="button" tabindex="0" data-code="${escapeHtml(team.inviteCode || '')}" title="Copy invite code"><code>${escapeHtml(team.inviteCode || '------')}</code><i class="fa-regular fa-copy"></i></span>`;
           btn.addEventListener('click', () => selectTeam(doc.id));
           list.appendChild(btn);
         });
@@ -273,6 +275,7 @@
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       selectTeam(ref.id);
+      openTeamView();
     } catch (error) {
       console.error('createTeam failed', error);
       alert('Could not create the team: ' + (error && error.message ? error.message : error) + '\n\nCheck that your Firestore rules include the teams/{teamId} block.');
@@ -293,6 +296,7 @@
       const team = doc.data();
       if ((team.memberIds || []).includes(currentUser.uid)) {
         selectTeam(doc.id);
+        openTeamView();
         return;
       }
       await doc.ref.update({
@@ -300,6 +304,7 @@
         [`members.${currentUser.uid}`]: { name: displayName() }
       });
       selectTeam(doc.id);
+      openTeamView();
     } catch (error) {
       console.error('joinTeam failed', error);
       alert('Could not join that team: ' + (error && error.message ? error.message : error) + '\n\nCheck that your Firestore rules include the updated teams/{teamId} block (it needs to allow a new member to add themselves).');
@@ -362,6 +367,53 @@
     if (rewardsUnsub) { rewardsUnsub(); rewardsUnsub = null; }
     if (docsUnsub) { docsUnsub(); docsUnsub = null; }
     resetDocsState();
+  }
+
+  function openTeamView() {
+    document.body.classList.add('team-open');
+    document.body.classList.remove('members-popup');
+    delete document.body.dataset.teamPage;
+    window.scrollTo(0, 0);
+    const m = document.querySelector('.main-wrap');
+    if (m) m.scrollTop = 0;
+  }
+  function closeTeamView() {
+    document.body.classList.remove('team-open', 'members-popup');
+    delete document.body.dataset.teamPage;
+    window.scrollTo(0, 0);
+  }
+
+  function activateTab(name) {
+    const t = document.querySelector('.team-tab[data-tab="' + name + '"]');
+    if (t) t.click();
+  }
+  const PAGE_TITLES = { goals: 'Goals', docs: 'Docs', rewards: 'Wins', chat: 'Chat' };
+  function setTeamPage(name) {
+    const b = document.body;
+    b.classList.remove('members-popup');
+    if (name === 'members') { activateTab('members'); b.classList.add('members-popup'); return; }
+    if (!name) {
+      delete b.dataset.teamPage;
+    } else {
+      b.dataset.teamPage = name;
+      if (name !== 'chat') activateTab(name);
+      const nm = $('team-name'), t = $('team-sub-title');
+      if (t) t.textContent = ((nm && nm.textContent) || 'Team') + ' · ' + PAGE_TITLES[name];
+    }
+    window.scrollTo(0, 0);
+    const m = document.querySelector('.main-wrap');
+    if (m) m.scrollTop = 0;
+  }
+  function copyText(text) {
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      ta.remove();
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).catch(fallback);
+    else fallback();
   }
 
   function selectTeam(teamId) {
@@ -2196,8 +2248,55 @@
     // The notification bell asks us to open a team.
     document.addEventListener('teamNotifyOpenTeam', (e) => {
       const id = e.detail && e.detail.teamId;
-      if (id && currentUser) selectTeam(id);
+      if (id && currentUser) { selectTeam(id); openTeamView(); }
     });
+    // Mobile: mirror the sidebar team list into the page and open a team on tap
+    const sideList = $('team-list'), pageList = $('team-picker-list');
+    if (sideList && pageList) {
+      const mirror = () => { pageList.innerHTML = sideList.innerHTML; };
+      new MutationObserver(mirror).observe(sideList, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+      mirror();
+      pageList.addEventListener('click', (e) => {
+        const codeEl = e.target.closest('.team-code');
+        if (codeEl) {                       // copy invite code, don't open the team
+          e.stopPropagation();
+          copyText(codeEl.dataset.code || '');
+          const icon = codeEl.querySelector('i');
+          if (icon) {
+            icon.className = 'fa-solid fa-check';
+            setTimeout(() => { icon.className = 'fa-regular fa-copy'; }, 1200);
+          }
+          return;
+        }
+        const b = e.target.closest('.team-item');
+        if (!b) return;
+        const i = Array.from(pageList.querySelectorAll('.team-item')).indexOf(b);
+        const side = sideList.querySelectorAll('.team-item')[i];
+        if (side) side.click();
+        openTeamView();
+      });
+    }
+    const backBtn = $('team-back-btn');
+    if (backBtn) backBtn.addEventListener('click', closeTeamView);
+
+    // Tiles -> sub-pages / members popup (mobile only)
+    document.querySelectorAll('.team-metrics [data-go]').forEach((card) => {
+      const go = () => { if (window.matchMedia('(max-width: 860px)').matches) setTeamPage(card.dataset.go); };
+      card.addEventListener('click', go);
+      card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    });
+    const onClick = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
+    onClick('team-sub-back', () => setTeamPage(null));
+    onClick('members-close', () => setTeamPage(null));
+    onClick('members-backdrop', () => setTeamPage(null));
+
+    // keep the Docs tile count in sync with the tab's count
+    const dc = $('docs-count'), dt = $('docs-tile-count');
+    if (dc && dt) {
+      const syncDocs = () => { dt.textContent = dc.textContent; };
+      new MutationObserver(syncDocs).observe(dc, { childList: true, characterData: true, subtree: true });
+      syncDocs();
+    }
     $('team-list').innerHTML = '<div class="empty-list">Loading your teams…</div>';
     let resolved = false;
     const resolve = (user) => { resolved = true; currentUser = user; renderAuthState(); };

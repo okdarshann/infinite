@@ -19,8 +19,8 @@
   const SCRIPT_EL = document.currentScript || document.querySelector('script[src*="team-notify.js"]');
   const SCRIPT_SRC = SCRIPT_EL && SCRIPT_EL.src;
   // team-notify.js lives in /static/js/, the team page in /team/
-  const TEAM_URL = SCRIPT_SRC ? new URL('../../team/', SCRIPT_SRC).href : 'team/';
-  const CONTACT_URL = SCRIPT_SRC ? new URL('../../contact/', SCRIPT_SRC).href : 'contact/';
+  const TEAM_URL = SCRIPT_SRC ? new URL('../../team/index.html', SCRIPT_SRC).href : 'team/index.html';
+  const CONTACT_URL = SCRIPT_SRC ? new URL('../../contact/index.html', SCRIPT_SRC).href : 'contact/index.html';
   const ON_TEAM_PAGE = /\/team(\/(index\.html)?)?$/.test(location.pathname);
   const ON_CONTACT_PAGE = /\/contact(\/(index\.html)?)?$/.test(location.pathname);
   const BASE_TITLE = document.title;
@@ -236,8 +236,7 @@
     document.title = (count ? '(' + count + ') ' : '') + BASE_TITLE;
 
     if (!count) {
-      el.list.innerHTML = '<div class="nd-empty">No new messages.<br>You\'ll see them here when a teammate writes in your team chat,'
-        + (isAdmin() ? ' or when someone uses the Connect form.' : '.') + '</div>';
+      el.list.innerHTML = '<div class="nd-empty">No new messages.<br>You\'ll see them here when a teammate writes in your team chat.</div>';
       return;
     }
     el.list.innerHTML = '';
@@ -420,7 +419,6 @@
       if (!db) { if (++tries < 50) setTimeout(attach, 200); return; }
       teamsUnsub = db.collection('teams').where('memberIds', 'array-contains', user.uid)
         .onSnapshot((snap) => watchMessages(snap.docs), (err) => console.warn('team notifications', err));
-      if (isAdmin() && !contactUnsub) watchContact(db);
     };
     attach();
   }

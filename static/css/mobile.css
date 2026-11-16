@@ -49,13 +49,16 @@ textarea {
 .np-main,
 .cn-grid,
 .cn-card,
-.cn-inbox,
-.ax-main {
+.cn-inbox {
   min-width: 0;
 }
 
 .mobile-menu-btn,
-.mobile-nav-overlay {
+.mobile-nav-overlay,
+.np-top-btn,
+.np-notes-overlay,
+.np-notes-close,
+.user-chip-more {
   display: none;
 }
 
@@ -179,6 +182,39 @@ textarea {
   .mobile-menu-btn:focus-visible {
     outline: 2px solid var(--green);
     outline-offset: 2px;
+  }
+
+  /* New note and notes list live in the "Notepad & Docs" title line on phones. */
+  .topbar .np-top-btn {
+    display: inline-grid;
+    order: 5;
+    flex: 0 0 36px;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .topbar .np-top-btn:active {
+    background: var(--surface3);
+  }
+
+  .topbar .np-top-btn:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+  }
+
+  /* The + sits in the right corner, after the notes list icon. */
+  .topbar .np-add-note-btn {
+    order: 6;
   }
 
   .main-wrap {
@@ -392,22 +428,18 @@ textarea {
     width: 100%;
   }
 
-  .sheet-top {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 10px;
-  }
+  .sheet-top { align-items: stretch; flex-direction: column; gap: 10px; padding: 10px 12px; }
 
-  .sheet-tools {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-  }
+.sheet-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.sheet-tabs::-webkit-scrollbar { display: none; }
+.sheet-tab { flex: none; white-space: nowrap; }
 
-  .sheet-tools .tool-btn {
-    flex: 1 1 auto;
-    min-height: 38px;
-  }
+.sheet-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 44px; gap: 7px; margin-left: 0; }
+.sheet-tools .tool-btn { min-height: 38px; padding: 6px 4px; }
+
+.sheet-fmt { padding: 8px 12px; }
+.fmt-hint { display: none; }
+.sheet-wrap { max-height: 62vh; }
 
   .sheet-wrap,
   .cal-grid-wrap,
@@ -418,9 +450,8 @@ textarea {
     -webkit-overflow-scrolling: touch;
   }
 
-  .lsheet {
-    min-width: 620px;
-  }
+  .lsheet { min-width: 0; }
+.lcell { font-size: 16px; } /* prevents iOS zoom on focus */
 
   /* Calendar stays readable: its seven-day grid scrolls inside its own frame. */
   .cal-controls {
@@ -532,71 +563,261 @@ textarea {
     max-width: 100%;
   }
 
-  /* Notes and documents */
+  /* Notes and documents on phones: the editor is the screen and the notes
+     list slides in over it from the left, like any notes app drawer. */
   .np-shell {
-    grid-template-columns: minmax(0, 1fr) !important;
+    display: block;
     min-height: 0;
+    padding: 16px var(--mobile-gutter) calc(34px + env(safe-area-inset-bottom));
   }
 
   .np-side {
-    position: relative;
-    top: auto;
-    height: auto;
-    max-height: 360px;
-    overflow: visible;
-    border-right: 0;
-    border-bottom: 1px solid var(--line-soft);
+    position: fixed;
+    top: var(--topbar-h, 57px);
+    left: 0;
+    z-index: 100;
+    width: min(320px, 88vw);
+    height: calc(100vh - var(--topbar-h, 57px));
+    height: calc(100dvh - var(--topbar-h, 57px));
+    max-height: none;
+    overflow: hidden;
+    border-right: 1px solid var(--line-soft);
+    border-bottom: 0;
+    transform: translateX(-105%);
+    transition: transform .22s ease;
+    box-shadow: 16px 0 42px rgba(0, 0, 0, .3);
+  }
+
+  body.np-notes-open {
+    overflow: hidden;
+  }
+
+  body.np-notes-open .np-side {
+    transform: translateX(0);
+  }
+
+  .np-notes-overlay {
+    position: fixed;
+    inset: var(--topbar-h, 57px) 0 0 0;
+    z-index: 95;
+    display: block;
+    background: rgba(3, 7, 13, .58);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .2s ease, visibility .2s ease;
+  }
+
+  body.np-notes-open .np-notes-overlay {
+    opacity: 1;
+    visibility: visible;
   }
 
   .np-side .pad {
-    padding: 13px;
+    padding: 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .np-new {
-    min-height: 42px;
-    margin-bottom: 12px;
+  /* "+ New note" and the drawer's close button share the top row. */
+  .np-side-head {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .np-side-head .np-new {
+    flex: 1;
+    min-height: 46px;
+    margin-bottom: 0;
+    border-radius: 11px;
+    font-size: 14px;
+  }
+
+  /* The empty-state button must not stretch: it sits in a column flex card. */
+  .np-empty-btn {
+    min-height: 46px;
+    border-radius: 11px;
+    font-size: 14px;
+  }
+
+  .np-notes-close {
+    flex: 0 0 46px;
+    min-height: 46px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  .np-notes-close:active {
+    background: var(--surface3);
+  }
+
+  .np-count {
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 10.5px;
+  }
+
+  .np-count > span:first-child i {
+    margin-right: 6px;
+    font-size: 10px;
   }
 
   .np-list {
-    max-height: 155px;
-    flex: 0 1 auto;
+    max-height: none;
+    flex: none;
+    overflow: visible;
+    gap: 2px;
+  }
+
+  .np-item {
+    gap: 2px;
+    padding: 3px 0;
+  }
+
+  .np-item-main {
+    padding: 8px;
+  }
+
+  .np-item-main b {
+    font-size: 14px;
+  }
+
+  .np-item-main span {
+    font-size: 11.5px;
+  }
+
+  /* Comfortable touch targets for the per-note actions. */
+  .np-toggle,
+  .np-toggle-spacer {
+    width: 30px;
+    height: 36px;
   }
 
   .np-item-actions,
   .np-del,
-  .np-item-dl {
+  .np-item-dl,
+  .np-add-sub {
     opacity: 1;
   }
 
+  .np-del,
+  .np-item-dl,
+  .np-add-sub {
+    width: 34px;
+    height: 34px;
+    font-size: 12px;
+  }
+
+  /* The editor fills the screen behind the notes drawer. */
   .np-main {
     min-height: 44vh;
   }
 
   .np-editor {
-    width: calc(100% - 28px);
-    padding: 24px 0 50px;
+    width: 100%;
+    padding: 18px 0 60px;
   }
 
   #note-title {
-    font-size: clamp(25px, 7vw, 34px);
+    font-size: clamp(24px, 7vw, 32px);
     line-height: 1.2;
   }
 
+  #note-date {
+    margin: 8px 0 14px;
+  }
+
+  /* Wrap the formatting tools instead of scrolling them out of reach. Keeping
+     the row scrollable used to clip the colour/marker pickers, because an
+     overflow container cuts off absolutely positioned children. */
   .np-tools {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    overflow: visible;
     max-width: 100%;
-    gap: 6px;
-    padding: 6px 0 8px;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    -webkit-overflow-scrolling: touch;
+    gap: 8px;
+    padding: 2px 0 14px;
+    margin-bottom: 16px;
   }
 
   .np-tools > * {
-    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .np-tools button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .np-tools button[hidden] {
+    display: none !important;
+  }
+
+  /* Row 1: B I U bullet quote */
+  .np-tools > button[data-command] {
+    grid-column: span 2;
+    width: 100%;
+  }
+
+  /* Row 2: Colour | Marker */
+  .np-tools > .np-tt {
+    grid-column: span 5;
+  }
+
+  .np-tools .np-tt > button {
+    width: 100% !important;   /* beats the inline width:auto in the HTML */
+  }
+
+  /* Row 3: Subnote | Download PDF */
+  .np-tools > #add-subnote-btn,
+  .np-tools > #download-note-btn {
+    grid-column: span 5;
+    width: 100% !important;
+    padding: 0 10px !important;
+  }
+
+  /* Row 4: Share with team, full width */
+  .np-tools > #share-team-btn {
+    grid-column: 1 / -1;
+    width: 100% !important;
+    margin-left: 0 !important;
+  }
+
+  /* Colour/marker palettes become a panel the full width of the toolbar, so
+     they always fit the screen and are never cut off. */
+  .np-tools .np-tt {
+    position: static;
+  }
+
+  .np-tools .np-pop {
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    width: auto;
+    max-width: none;
+    z-index: 85;
   }
 
   #note-body {
-    min-height: 35vh;
+    min-height: 45vh;
+    font-size: 15px;
+    line-height: 1.8;
     overflow-wrap: anywhere;
   }
 
@@ -710,189 +931,6 @@ textarea {
     bottom: calc(12px + env(safe-area-inset-bottom));
     width: auto;
     max-width: none;
-  }
-
-  /* AI assistant has its own navigation and full-height chat layout. */
-  body.ax {
-    width: 100%;
-    height: 100vh;
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  body.ax .ax-side {
-    position: fixed;
-    inset: 0 auto 0 0;
-    width: min(300px, 86vw);
-    height: 100vh;
-    height: 100dvh;
-    margin-left: 0 !important;
-    transform: translateX(-105%);
-    z-index: 60;
-    box-shadow: 16px 0 42px rgba(0, 0, 0, .3);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  body.ax.open-side .ax-side {
-    margin-left: 0 !important;
-    transform: translateX(0);
-  }
-
-  body.ax.open-side::before {
-    z-index: 50;
-    background: rgba(3, 7, 13, .62);
-    backdrop-filter: blur(2px);
-  }
-
-  body.ax .ax-main {
-    width: 100%;
-    min-width: 0;
-    height: 100%;
-    min-height: 0;
-  }
-
-  body.ax .ax-top {
-    flex: none;
-    gap: 8px;
-    min-height: 56px;
-    padding: 8px 10px;
-    padding-top: max(8px, env(safe-area-inset-top));
-  }
-
-  body.ax .ax-menu {
-    display: grid;
-    flex: none;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-  }
-
-  body.ax .ax-crumb {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 10px;
-    letter-spacing: .08em;
-  }
-
-  body.ax .ax-dash {
-    flex: none;
-    padding: 7px 9px;
-    font-size: 11px;
-    white-space: nowrap;
-  }
-
-  body.ax .ax-note-control {
-    flex: none;
-  }
-
-  body.ax .ax-note-panel {
-    position: fixed;
-    top: calc(58px + env(safe-area-inset-top));
-    right: 10px;
-    width: min(320px, calc(100vw - 20px));
-    max-height: calc(100dvh - 80px);
-    overflow-y: auto;
-  }
-
-  body.ax .ax-scroll {
-    min-height: 0;
-    padding-bottom: 8px;
-    overscroll-behavior: contain;
-  }
-
-  body.ax .ax-hero {
-    padding: 24px 14px 12px;
-  }
-
-  body.ax .ax-hero h1 {
-    font-size: clamp(23px, 6.3vw, 30px);
-    line-height: 1.25;
-  }
-
-  body.ax .ax-thread {
-    gap: 18px;
-    padding: 18px 12px 24px;
-  }
-
-  body.ax .ax-row {
-    gap: 8px;
-  }
-
-  body.ax .ax-av {
-    width: 30px;
-    height: 20px;
-    margin-top: 3px;
-  }
-
-  body.ax .ax-msg.ai {
-    font-size: 14.5px;
-    line-height: 1.65;
-    overflow-wrap: anywhere;
-  }
-
-  body.ax .ax-msg.ai b.ax-h {
-    font-size: 16px;
-  }
-
-  body.ax .ax-msg.me {
-    max-width: 92%;
-    font-size: 14.5px;
-    overflow-wrap: anywhere;
-  }
-
-  body.ax .ax-act {
-    margin-left: 38px;
-  }
-
-  body.ax .ax-cp {
-    opacity: 1;
-  }
-
-  body.ax .ax-comp-wrap {
-    flex: none;
-    padding: 0 9px 6px;
-    padding-bottom: max(6px, env(safe-area-inset-bottom));
-  }
-
-  body.ax .ax-comp {
-    border-radius: 18px;
-    padding: 7px 8px 7px 12px;
-  }
-
-  body.ax .ax-compose-row {
-    gap: 7px;
-  }
-
-  body.ax .ax-comp textarea {
-    min-height: 36px;
-    max-height: 120px;
-    padding: 7px 0;
-    font-size: 16px;
-  }
-
-  body.ax .ax-send {
-    width: 38px;
-    height: 38px;
-  }
-
-  body.ax .ax-gate {
-    flex-wrap: wrap;
-    gap: 8px;
-    font-size: 12px;
-  }
-
-  body.ax .ax-gate button {
-    min-height: 36px;
-  }
-
-  body.ax .ax-note {
-    flex: none;
-    font-size: 10px;
-    line-height: 1.4;
-    padding: 0 12px 6px;
   }
 }
 
@@ -1011,29 +1049,9 @@ textarea {
     flex: 1 1 100%;
   }
 
-  .np-editor {
-    width: calc(100% - 24px);
-  }
-
   .np-team-banner button,
   .td-banner button {
     flex: 1 1 auto;
-  }
-
-  body.ax .ax-crumb {
-    font-size: 9px;
-  }
-
-  body.ax .ax-dash {
-    padding: 7px 8px;
-    font-size: 10px;
-  }
-
-  body.ax .ax-note {
-    display: block;
-    font-size: 9px;
-    padding-left: 8px;
-    padding-right: 8px;
   }
 }
 
@@ -1067,21 +1085,13 @@ textarea {
   .topbar .clock-pill {
     display: none;
   }
-
-  body.ax .ax-dash {
-    font-size: 0;
-    min-width: 36px;
-  }
-
-  body.ax .ax-dash::after {
-    content: "Home";
-    font-size: 11px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
+  .np-side,
   .mobile-nav-overlay,
+  .np-notes-overlay,
   .mobile-menu-btn {
     transition: none !important;
   }
@@ -1131,14 +1141,6 @@ textarea {
 
   .topbar > .top-actions {
     display: contents;
-  }
-
-  .topbar .tour-help-btn {
-    order: 4;
-    flex: 0 0 36px;
-    width: 36px;
-    height: 36px;
-    margin: 0;
   }
 
   .topbar .sticky-bell-btn {
@@ -1249,5 +1251,1080 @@ textarea {
 
   .topbar > .crumb {
     flex-basis: 55px;
+  }
+}
+
+/* ============================================================
+   Native app shell (Capacitor). See static/js/native.js.
+   Only the .native-* classes matter: on the web nothing here applies.
+   ============================================================ */
+html.native-app {
+  -webkit-text-size-adjust: 100%;
+  background: var(--bg);
+}
+
+/* Android 15 draws the page under the system bars. On every other device
+   these insets are 0, so the rule is free. */
+html.native-android body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+html.native-android .topbar {
+  top: env(safe-area-inset-top);
+}
+
+html.native-android .sidebar,
+html.native-android .np-side {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* The notes drawer is fixed under the top bar, which itself sits below the
+   status bar, so it needs no top inset of its own. */
+html.native-android .np-side {
+  top: calc(var(--topbar-h, 57px) + env(safe-area-inset-top));
+  height: calc(100dvh - var(--topbar-h, 57px) - env(safe-area-inset-top));
+  padding-top: 0;
+}
+
+html.native-android .np-notes-overlay {
+  inset: calc(var(--topbar-h, 57px) + env(safe-area-inset-top)) 0 0 0;
+}
+
+/* "All notes" sticks under the top bar, which itself sits below the status bar. */
+html.native-android .np-back {
+  top: calc(var(--topbar-h, 57px) + env(safe-area-inset-top));
+}
+
+/* Google sign-in opens a popup, which a WebView cannot host. Email and
+   password work in the app, so hide the button and its divider. */
+html.native-app #auth-google,
+html.native-app .ap-divider {
+  display: none !important;
+}
+
+html.native-app a,
+html.native-app button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 860px) {
+  /* Top bar, right side: [bell] [list] [+] */
+  .topbar .notif-bell {
+    order: 5;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+  }
+
+  .topbar .np-notes-btn {
+    order: 6;
+  }
+
+  .topbar .np-add-note-btn {
+    order: 7;
+  }
+
+  .topbar .sticky-bell-btn {
+    order: 6;
+  }
+
+  /* Account actions (Sign up / Change password / Log out) sit behind a small
+     icon in the corner of the guest member box. */
+  .sidebar .user-chip {
+    position: relative;
+  }
+
+  .sidebar .user-chip-more {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-left: auto;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface3);
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .sidebar .user-chip-more:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+  }
+
+  .sidebar .user-chip.account-open .user-chip-more {
+    border-color: var(--lav);
+    color: var(--lav);
+  }
+
+  /* Pages without a user chip keep the account actions as a normal row. */
+  .sidebar .auth-account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: auto 12px 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--line-soft);
+  }
+
+  /* Inside the chip it becomes a small popover that opens above the icon. */
+  .sidebar .user-chip .auth-account-actions {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 6;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: min(228px, 78vw);
+    margin: 0;
+    padding: 10px;
+    border-radius: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--line);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .45);
+  }
+
+  .sidebar .user-chip.account-open .auth-account-actions {
+    display: flex;
+  }
+
+  .sidebar .auth-account-actions[hidden] {
+    display: none !important;
+  }
+
+  .sidebar .auth-account-actions + .side-foot {
+    margin-top: 0;
+  }
+
+  .sidebar .auth-account-label {
+    flex: 1 0 100%;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 12.5px;
+  }
+
+  .sidebar .auth-inline-button {
+    flex: 1 1 auto;
+    min-height: 36px;
+    padding: 7px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .sidebar .user-chip .auth-account-label {
+    flex: 0 0 auto;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 12px;
+  }
+
+  .sidebar .user-chip .auth-inline-button {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 34px;
+    padding: 6px 10px;
+  }
+}
+
+/* ===== Mobile: 3 progress cards in ONE row ===== */
+@media (max-width: 860px) {
+  .cards-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  /* cancel the "last card full width" rule from style.css */
+  .cards-grid > .cad-card:last-child {
+    grid-column: auto;
+  }
+
+  .cards-grid .cad-card {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: 0;
+    min-width: 0;
+    padding: 12px 6px;
+    text-align: center;
+  }
+
+  .cards-grid .cad-card .icon {
+    display: none;
+  }
+
+  .cards-grid .cad-card .donut {
+    width: 64px;
+    height: 64px;
+    flex: 0 0 64px;
+  }
+
+  .cards-grid .cad-card .donut svg {
+    width: 64px;
+    height: 64px;
+  }
+
+  .cards-grid .cad-card .dc-val {
+    font-size: 12px;
+  }
+
+  .cards-grid .cad-card .dc-lbl {
+    font-size: 6px;
+  }
+
+  .cards-grid .cad-card .cad-info {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cards-grid .cad-card .cad-eyebrow {
+    font-size: 7px;
+    letter-spacing: .06em;
+    margin-bottom: 3px;
+  }
+
+  .cards-grid .cad-card .cad-name {
+    font-size: 12px;
+    margin-bottom: 5px;
+    white-space: normal;
+  }
+
+  .cards-grid .cad-card .kv {
+    font-size: 9px;
+    margin-bottom: 2px;
+    white-space: normal;
+  }
+
+  .cards-grid .cad-card .cad-foot {
+    font-size: 7px;
+    letter-spacing: .04em;
+    margin-top: 6px;
+  }
+}
+
+/* ===== Mobile dashboard: guest icon in header + whole overview fits one screen ===== */
+.guest-mode-chip { display: none; }
+
+@media (max-width: 860px) {
+  /* 1. Guest mode: banner is replaced by a small icon in the top bar */
+  .guest-mode-note { display: none !important; }
+
+  .topbar .guest-mode-chip {
+    order: 5;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(61, 220, 151, .45);
+    border-radius: 9px;
+    background: var(--green-soft);
+    color: var(--green);
+    font-size: 14px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .topbar .guest-mode-chip[hidden] { display: none !important; }
+  .topbar .guest-mode-chip:active { transform: scale(.94); }
+
+  /* 2. Overview: everything below the header fits the screen, no scrolling */
+  .page:has(#guest-mode-notice) {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100dvh - 58px);
+    padding-top: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    gap: 10px;
+  }
+  .page:has(#guest-mode-notice) > * { margin: 0; flex: 0 0 auto; }
+
+  .page:has(#guest-mode-notice) .page-head { margin: 0; }
+  .page:has(#guest-mode-notice) .page-title { font-size: 22px; margin: 2px 0 0; }
+  .page:has(#guest-mode-notice) .page-sub { font-size: 10px; margin-top: 2px; }
+
+  /* hero card */
+  .page:has(#guest-mode-notice) .hero-card { padding: 12px 14px; margin: 0; }
+  .page:has(#guest-mode-notice) .hero-top { gap: 2px 10px; }
+  .page:has(#guest-mode-notice) .hero-year { font-size: 24px; }
+  .page:has(#guest-mode-notice) .hero-pct { font-size: 22px; }
+  .page:has(#guest-mode-notice) .hero-meta { font-size: 10.5px; }
+  .page:has(#guest-mode-notice) .year-track { padding: 18px 2px 6px; }
+  .page:has(#guest-mode-notice) .yt-bar { height: 26px; }
+  .page:has(#guest-mode-notice) .quarters { margin-top: 8px; gap: 6px; }
+  .page:has(#guest-mode-notice) .q-card { padding: 7px 10px; }
+  .page:has(#guest-mode-notice) .q-card .qp { margin: 3px 0 5px; font-size: 13px; }
+
+  /* 3 progress cards */
+  .page:has(#guest-mode-notice) .cards-grid { margin: 0; gap: 6px; }
+  .page:has(#guest-mode-notice) .cards-grid .cad-card { padding: 9px 4px; gap: 5px; }
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .donut,
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .donut svg {
+    width: clamp(48px, 7.2dvh, 62px);
+    height: clamp(48px, 7.2dvh, 62px);
+    flex-basis: clamp(48px, 7.2dvh, 62px);
+  }
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .cad-name { font-size: 11.5px; margin-bottom: 3px; }
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .cad-foot { margin-top: 3px; }
+
+  /* quote card */
+  .page:has(#guest-mode-notice) .quote-card { margin: 0; padding: 10px 12px; }
+  .page:has(#guest-mode-notice) .axiom { font-size: 12.5px; line-height: 1.35; }
+}
+
+/* shorter phones: compact further, then drop the least important details */
+@media (max-width: 860px) and (max-height: 800px) {
+  .page:has(#guest-mode-notice) { gap: 8px; padding-top: 8px; }
+  .page:has(#guest-mode-notice) .page-sub,
+  .page:has(#guest-mode-notice) .velocity { display: none; }
+  .page:has(#guest-mode-notice) .hero-card { padding: 10px 12px; }
+  .page:has(#guest-mode-notice) .year-track { padding: 16px 2px 4px; }
+  .page:has(#guest-mode-notice) .quarters { margin-top: 6px; gap: 5px; }
+  .page:has(#guest-mode-notice) .q-card { padding: 5px 9px; }
+  .page:has(#guest-mode-notice) .q-card .qp { margin: 1px 0 4px; font-size: 12px; }
+  .page:has(#guest-mode-notice) .cards-grid .cad-card { padding: 7px 4px; gap: 4px; }
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .donut,
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .donut svg {
+    width: 50px; height: 50px; flex-basis: 50px;
+  }
+  .page:has(#guest-mode-notice) .quote-card { padding: 8px 10px; }
+}
+
+@media (max-width: 860px) and (max-height: 700px) {
+  .page:has(#guest-mode-notice) .yt-ticks { display: none; }
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .cad-foot { display: none; }
+  .page:has(#guest-mode-notice) .quote-actions { display: none; }
+  .page:has(#guest-mode-notice) .axiom { font-size: 12px; }
+}
+
+@media (max-width: 860px) and (max-height: 600px) {
+  .page:has(#guest-mode-notice) .kicker { display: none; }
+  .page:has(#guest-mode-notice) .quarters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .page:has(#guest-mode-notice) .q-card .qp { font-size: 10.5px; }
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .donut,
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .donut svg {
+    width: 44px; height: 44px; flex-basis: 44px;
+  }
+  .page:has(#guest-mode-notice) .cards-grid .cad-card .dc-val { font-size: 10.5px; }
+}
+
+.v-count,
+.v-chev {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  /* Header: title on top, the DAILY · WEEKLY · … line neatly underneath */
+  #life-goals > .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    gap: 5px;
+    margin: 0 0 14px;
+  }
+
+  #life-goals > .section-head h2 {
+    display: flex;
+    align-items: center;
+    margin: 0;
+  }
+
+  #life-goals > .section-head .mini-link {
+    margin: 0;
+    padding-left: 2px;
+    font-size: 10px;
+    letter-spacing: .12em;
+    line-height: 1.4;
+    white-space: normal;
+  }
+
+  /* Four buckets become one tidy list */
+  #life-goals .vectors {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  #life-goals .vector-col {
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid var(--line-soft);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #life-goals .vector-col:last-child {
+    border-bottom: 0;
+  }
+
+  #life-goals .vector-col:active {
+    background: var(--surface2);
+  }
+
+  #life-goals .v-head {
+    flex-wrap: nowrap;
+    gap: 10px;
+    min-height: 64px;
+    margin: 0;
+    padding: 0 16px;
+    outline: none;
+  }
+
+  #life-goals .v-head:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--lav);
+  }
+
+  #life-goals .v-name {
+    font-size: 11px;
+  }
+
+  #life-goals .v-meta {
+    margin-left: auto;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  #life-goals .v-count {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 7px;
+    border-radius: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--line-soft);
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  #life-goals .v-chev {
+    display: inline-block;
+    flex: none;
+    color: var(--faint);
+    font-size: 11px;
+  }
+
+  /* List shows names only. Goals and the add box live in the popup. */
+  #life-goals .vector-col > .v-list,
+  #life-goals .vector-col > .v-add {
+    display: none;
+  }
+
+  #life-goals .vector-col > .v-head .v-meta {
+    display: none;
+  }
+
+  #life-goals .v-name {
+    flex: 1;
+  }
+
+  #life-goals .v-count {
+    margin-left: auto;
+  }
+}
+
+/* Popup shown in the centre of the screen when a bucket is tapped */
+body.goal-pop-open {
+  overflow: hidden;
+}
+
+.goal-pop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(18px + env(safe-area-inset-top)) var(--mobile-gutter, 16px) calc(18px + env(safe-area-inset-bottom));
+  background: rgba(5, 8, 14, .72);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: goalPopFade .16s ease;
+}
+
+.goal-pop-overlay[hidden] {
+  display: none;
+}
+
+.goal-pop {
+  width: 100%;
+  max-width: 420px;
+  max-height: min(80vh, 620px);
+  max-height: min(80dvh, 620px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+  overflow: hidden;
+  outline: none;
+  animation: goalPopIn .18s ease;
+}
+
+.goal-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+  padding: 14px 14px 12px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.goal-pop-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: var(--text);
+}
+
+.goal-pop-meta {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.goal-pop-close {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.goal-pop-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px 16px 16px;
+  overflow: hidden;
+}
+
+.goal-pop-body .v-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  gap: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.goal-pop-body .v-item {
+  gap: 11px;
+  padding: 7px 0;
+  font-size: 14px;
+}
+
+.goal-pop-body .v-item .txt {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
+.goal-pop-body .v-check {
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+}
+
+.goal-pop-body .v-del {
+  padding: 4px 8px;
+  font-size: 18px;
+  opacity: 1;
+}
+
+.goal-pop-body .v-add {
+  flex: none;
+}
+
+.goal-pop-body .v-add input {
+  padding: 10px 12px;
+  font-size: 16px; /* 16px stops iOS zooming into the field */
+}
+
+.goal-pop-body .v-add button {
+  width: 42px;
+  height: 42px;
+  font-size: 18px;
+}
+
+@keyframes goalPopFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes goalPopIn {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ============================================================
+   Mobile dashboard: fill the whole screen (no blank strip at the bottom)
+   ============================================================ */
+@media (max-width: 600px) {
+  .page:has(#guest-mode-notice) .hero-card {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .page:has(#guest-mode-notice) .cards-grid {
+    flex: 1 1 auto;
+  }
+
+  .page:has(#guest-mode-notice) .cards-grid .cad-card {
+    justify-content: center;
+  }
+
+  .page:has(#guest-mode-notice) .quote-card {
+    flex: 0 0 auto;
+  }
+}
+
+/* ============================================================
+   Life Calendar: phone layout (grid fits the screen, no sideways scroll)
+   ============================================================ */
+@media (max-width: 860px) {
+  /* Birth date + lifespan: two tidy fields side by side, button below */
+  .cal-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    column-gap: 10px;
+    row-gap: 6px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  .cal-controls label {
+    font-size: 10px;
+    letter-spacing: .12em;
+    margin-top: 0;
+  }
+
+  .cal-controls label[for="birthdate-btn"] { grid-column: 1; grid-row: 1; }
+  .cal-controls #birthdate-btn             { grid-column: 1; grid-row: 2; }
+  .cal-controls label[for="lifespan"]  { grid-column: 2; grid-row: 1; }
+  .cal-controls #lifespan              { grid-column: 2; grid-row: 2; }
+
+  .cal-controls input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 16px; /* stops iOS zooming into the field */
+    border-radius: 10px;
+  }
+
+  .cal-controls .btn {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: 100%;
+    min-height: 46px;
+    margin-top: 8px;
+    justify-content: center;
+  }
+
+  /* Weeks grid: one year at a time, scroll up/down for other years */
+  .cal-grid-wrap {
+    padding: 12px 10px 14px;
+    overflow: hidden;
+  }
+
+  .cal-legend {
+    justify-content: center;
+    gap: 6px 14px;
+    margin-bottom: 10px;
+    font-size: 10.5px;
+  }
+
+  .cal-grid {
+    box-sizing: border-box;
+    height: 188px;               /* exactly one year card */
+    min-width: 0;
+    max-height: none;
+    padding: 0;
+    gap: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+    background: var(--surface2);
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+  }
+
+  .cal-year {
+    flex: 0 0 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(13, minmax(0, 1fr));
+    grid-auto-rows: min-content;
+    align-content: center;
+    gap: 5px;
+    padding: 10px 14px;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .cal-year .yl {
+    grid-column: 1 / 8;
+    grid-row: 1;
+    padding: 0 0 4px;
+    text-align: left;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    color: var(--text);
+  }
+
+  .cal-year .ya {
+    display: block;
+    grid-column: 8 / -1;
+    grid-row: 1;
+    align-self: center;
+    padding: 0 0 4px;
+    text-align: right;
+    font-size: 10px;
+    letter-spacing: .12em;
+  }
+
+  .cal-week {
+    max-height: none;
+    border-radius: 4px;
+  }
+
+  .cal-week.cur { box-shadow: 0 0 8px rgba(245, 176, 74, .7); }
+
+  .cal-grid-wrap::after {
+    content: "SCROLL UP / DOWN FOR OTHER YEARS";
+    display: block;
+    margin-top: 10px;
+    text-align: center;
+    font-size: 9.5px;
+    letter-spacing: .1em;
+    color: var(--faint);
+  }
+
+  /* Three stat cards in one row */
+  .cal-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stat-card { padding: 12px 6px; }
+
+  .stat-num { font-size: 20px; }
+
+  .stat-lbl {
+    font-size: 8.5px;
+    letter-spacing: .08em;
+    line-height: 1.35;
+  }
+}
+
+/* ---------- Team Goals: icon buttons beside title + 3 stat boxes in one row ---------- */
+@media (max-width: 860px) {
+  .page-head:has(.head-actions) { flex-wrap: nowrap; align-items: flex-start; }
+  .page-head:has(.head-actions) > div:first-child { flex: 1 1 0; min-width: 0; }
+
+  .head-actions { flex: none; flex-wrap: nowrap; gap: 8px; margin-left: auto; }
+
+  .btn.btn-icon { min-width: 44px; min-height: 44px; width: 44px; height: 44px; }
+
+  #team-content > .metrics,
+  .metrics.team-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+
+  .team-metrics .metric-card { padding: 10px 8px; text-align: center; }
+  .team-metrics .metric-card .ml {
+    justify-content: center; flex-direction: column; gap: 4px;
+    font-size: 8.5px; letter-spacing: .08em; margin-bottom: 4px;
+  }
+  .team-metrics .metric-card .mv { font-size: 20px; }
+  .team-metrics .metric-card .ms { font-size: 9px; line-height: 1.3; }
+}
+
+/* ---------- Team Goals (mobile): teams list page -> open a team ---------- */
+.team-picker,
+.team-back-btn { display: none; }
+
+@media (max-width: 860px) {
+  /* list moves out of the side menu */
+  .sidebar .team-list-wrap { display: none !important; }
+
+  /* list view (default) */
+  body:not(.team-signed-out) .team-picker {
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+  .team-picker-label {
+    font-size: 10px;
+    letter-spacing: .14em;
+    font-weight: 700;
+    color: var(--faint);
+    padding: 2px 4px 10px;
+  }
+  #team-picker-list { display: flex; flex-direction: column; gap: 8px; }
+  #team-picker-list .team-item {
+    position: relative;
+    padding: 13px 36px 13px 14px;
+    border: 1px solid var(--line-soft);
+    background: var(--surface2);
+    border-radius: 10px;
+    color: var(--text);
+  }
+  #team-picker-list .team-item strong { font-size: 14px; }
+  #team-picker-list .team-item span { font-size: 11px; }
+  #team-picker-list .team-item::after {
+    content: "›";
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: var(--faint);
+  }
+
+  /* team view (after tapping a team) */
+  body:not(.team-open) #team-content { display: none !important; }
+  body.team-open .team-picker { display: none !important; }
+
+  body.team-open .team-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 4px 0 8px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  body.team-open .team-back-btn:hover { color: var(--text); }
+
+  body.team-open .team-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+}
+
+/* Team Goals (mobile): chat and page title only belong to the right view */
+@media (max-width: 860px) {
+  /* teams list view: hide the chat */
+  body:not(.team-open) .wire {
+    display: none !important;
+  }
+
+  /* team opened: hide "Team Goals" title + create/join icons, team fills the page */
+  body.team-open .page-head {
+    display: none !important;
+  }
+}
+
+/* ---------- Team Goals (mobile): tiles, sub-pages, members popup, invite code ---------- */
+.metric-mobile-only,
+.team-subbar,
+.members-backdrop,
+.members-popup-head { display: none; }
+
+#team-list .team-code { display: none; }          /* sidebar list: no code */
+
+@media (max-width: 860px) {
+  /* invite code on each team row */
+  #team-picker-list .team-item { padding-right: 150px; }
+  #team-picker-list .team-code {
+    position: absolute;
+    right: 34px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 9px;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  #team-picker-list .team-code code {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--amber);
+  }
+  #team-picker-list .team-code i { font-size: 12px; }
+
+  /* tabs replaced by tiles */
+  .team-tabs { display: none !important; }
+
+  /* tiles: 3 on the first row, 2 wide ones below */
+  .team-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .team-metrics .metric-card { grid-column: span 2; cursor: pointer; transition: transform .1s, border-color .15s; }
+  .team-metrics .metric-card:hover { border-color: var(--line); }
+  .team-metrics .metric-card:active { transform: scale(.97); }
+  .team-metrics .metric-card.metric-mobile-only { display: block; grid-column: span 3; }
+
+  /* team home: only head + tiles */
+  body:not([data-team-page]) #team-content > .panel { display: none !important; }
+  body.team-open:not([data-team-page="chat"]) .wire { display: none !important; }
+
+  /* sub-pages */
+  body.team-open[data-team-page] .team-subbar { display: block; }
+  body[data-team-page] #team-content > .team-head,
+  body[data-team-page] #team-content > .metrics { display: none !important; }
+  .team-subbar .team-back-btn { color: var(--text); font-size: 14px; font-weight: 700; padding: 4px 0 12px; }
+
+  /* chat page */
+  body[data-team-page="chat"] #team-content { display: none !important; }
+  body.team-open[data-team-page="chat"] .wire {
+    display: flex !important;
+    height: calc(100dvh - 210px);
+    min-height: 320px;
+    margin-top: 0;
+  }
+
+  /* members popup */
+  body.members-popup .members-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .6);
+    z-index: 800;
+  }
+  body.members-popup #team-content > #tab-members,
+  body.members-popup #team-content > #tab-members[hidden] {
+    display: block !important;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    max-height: 75vh;
+    overflow-y: auto;
+    z-index: 801;
+    padding: 0 14px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+  }
+  body.members-popup .members-popup-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    padding: 14px 0 10px;
+    background: var(--surface);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    color: var(--faint);
+  }
+  .members-popup-head button {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+  }
+}
+
+/* ---------- Team Goals (mobile): equal tiles + tidy add-rows ---------- */
+@media (max-width: 860px) {
+
+  /* 5 equal tiles: 3 on the first row, 2 centered on the second */
+  #team-content > .metrics.team-metrics {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+  }
+  #team-content > .metrics.team-metrics > .metric-card {
+    grid-column: span 2;
+    min-height: 104px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  #team-content > .metrics.team-metrics > .metric-card:nth-child(4) { grid-column: 2 / span 2; }
+  #team-content > .metrics.team-metrics > .metric-card:nth-child(5) { grid-column: 4 / span 2; }
+
+  /* add goal / new doc / post win rows: clean, aligned form */
+  #team-content .commit-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    align-items: stretch;
+    margin-bottom: 14px;
+  }
+  #team-content .commit-row > input[type="text"] {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    height: 46px;
+  }
+  #team-content .commit-row > select {
+    width: 100%;
+    min-width: 0;
+    height: 46px;
+  }
+  #team-content .commit-row > select:only-of-type {
+    grid-column: 1 / -1;
+  }
+  #team-content .commit-row > .btn {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 46px;
+    justify-content: center;
+    font-size: 14px;
   }
 }

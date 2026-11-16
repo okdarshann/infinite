@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Infinite – Dashboard</title>
   <meta name="description" content="Track goals together: daily, weekly, monthly, and yearly progress, life calendar, notepad, and team accountability.">
   <link rel="icon" href="deserve.png" type="image/png">
-  <link rel="stylesheet" href="static/css/style.css?v=36">
+  <link rel="stylesheet" href="static/css/style.css?v=38">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -14,16 +14,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js" defer></script>
-  <script src="static/js/auth.js?v=10" defer></script>
+  <script src="static/js/native.js?v=1" defer></script>
+  <script src="static/js/auth.js?v=12" defer></script>
   <script src="static/js/sticky-notes.js?v=2" defer></script>
-  <script src="static/js/dashboard.js?v=7" defer></script>
+  <script src="static/js/dashboard.js?v=9" defer></script>
   <script src="static/js/inspire.js?v=9" defer></script>
   <script src="static/js/team-notify.js?v=4" defer></script>
-  <script src="static/js/ai-chat.js?v=9" defer></script>
-  <script src="static/js/tour.js?v=1" defer></script>
-  <link rel="stylesheet" href="static/css/mobile.css?v=2">
-  <script src="static/js/mobile-responsive.js?v=2" defer></script>
+  <link rel="stylesheet" href="static/css/mobile.css?v=11">
+  <script src="static/js/mobile-responsive.js?v=4" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -33,10 +31,10 @@
     </div>
     <nav class="side-nav">
       <a class="nav-item active" href="./"><i class="fa-solid fa-house"></i><em>Overview</em></a>
-      <a class="nav-item" href="calendar/"><i class="fa-solid fa-calendar-week"></i><em>Life Calendar</em></a>
-      <a class="nav-item" href="notepad/"><i class="fa-solid fa-book"></i><em>Notepad &amp; Docs</em></a>
-      <a class="nav-item" href="team/"><i class="fa-solid fa-users"></i><em>Team Goals</em></a>
-      <a class="nav-item" href="contact/"><i class="fa-solid fa-envelope"></i><em>Connect</em></a>
+      <a class="nav-item" href="calendar/index.html"><i class="fa-solid fa-calendar-week"></i><em>Life Calendar</em></a>
+      <a class="nav-item" href="notepad/index.html"><i class="fa-solid fa-book"></i><em>Notepad &amp; Docs</em></a>
+      <a class="nav-item" href="lifesheet/index.html"><i class="fa-solid fa-table"></i><em>Life Sheet</em></a>
+      <a class="nav-item" href="team/index.html"><i class="fa-solid fa-users"></i><em>Team Goals</em></a>
     </nav>
     <div class="side-foot">
       <div class="cad-mini">
@@ -54,9 +52,14 @@
   <div class="main-wrap">
     <div class="topbar">
       <span class="crumb">INFINITE &nbsp;›&nbsp; <b>DASHBOARD</b></span>
-      <span class="clock-pill"><i class="fa-regular fa-clock"></i><span id="utc-clock">--:--:-- UTC</span></span>
       <div class="top-actions">
         <div id="auth-account-actions" class="auth-account-actions" hidden></div>
+
+        <!-- NEW -->
+        <button type="button" class="guest-mode-chip" id="guest-mode-chip" title="Guest mode - tap to sign in" aria-label="Guest mode. Tap to sign in" hidden>
+          <i class="fa-solid fa-user-lock"></i>
+        </button>
+
         <button type="button" class="sticky-bell-btn" id="sticky-bell-btn" title="Open sticky notes" aria-label="Open sticky notes">
           <i class="fa-solid fa-thumbtack"></i>
           <span class="sticky-bell-badge" id="sticky-bell-badge" hidden>0</span>
@@ -76,7 +79,7 @@
         <span class="guest-mode-note-icon"><i class="fa-solid fa-user-lock"></i></span>
         <div class="guest-mode-note-copy">
           <strong>Guest mode</strong>
-          <p>AI chat and Team features require an account. Sign in to use them.</p>
+          <p>Team features require an account. Sign in to use them.</p>
         </div>
         <button type="button" class="guest-mode-note-action" id="guest-mode-signin">Sign in</button>
       </aside>
@@ -172,59 +175,37 @@
       </div>
 
       <!-- My Goals -->
+      <section class="goals-section" id="life-goals">
       <div class="section-head">
         <h2><i class="fa-solid fa-layer-group" style="color:var(--lav); margin-right:9px;"></i>My Goals</h2>
         <span class="mini-link">DAILY · WEEKLY · MONTHLY · YEARLY</span>
       </div>
       <div class="vectors">
         <div class="vector-col">
-          <div class="v-head"><span class="v-dot" style="background:var(--green)"></span><span class="v-name">TODAY</span><span class="v-meta" id="daily-count">0/0 DONE</span></div>
+          <div class="v-head"><span class="v-dot" style="background:var(--green)"></span><span class="v-name">TODAY'S GOALS</span><span class="v-meta" id="daily-count">0/0 DONE</span></div>
           <div class="v-list" id="daily-list"></div>
           <div class="v-add"><input type="text" id="daily-input" placeholder="Add a task for today..." maxlength="120"><button type="button" id="daily-add" aria-label="Add daily action">+</button></div>
         </div>
         <div class="vector-col">
-          <div class="v-head"><span class="v-dot" style="background:var(--lav)"></span><span class="v-name">THIS WEEK</span><span class="v-meta" id="weekly-meta">W– FOCUS</span></div>
+          <div class="v-head"><span class="v-dot" style="background:var(--lav)"></span><span class="v-name">WEEKLY GOAL</span><span class="v-meta" id="weekly-meta">W– FOCUS</span></div>
           <div class="v-list" id="weekly-list"></div>
           <div class="v-add"><input type="text" id="weekly-input" placeholder="Add a weekly goal..." maxlength="120"><button type="button" id="weekly-add" aria-label="Add weekly goal">+</button></div>
         </div>
         <div class="vector-col">
-          <div class="v-head"><span class="v-dot" style="background:var(--amber)"></span><span class="v-name">THIS MONTH</span><span class="v-meta" id="monthly-meta">--</span></div>
+          <div class="v-head"><span class="v-dot" style="background:var(--amber)"></span><span class="v-name">MONTHLY GOAL</span><span class="v-meta" id="monthly-meta">--</span></div>
           <div class="v-list" id="monthly-list"></div>
           <div class="v-add"><input type="text" id="monthly-input" placeholder="Add a monthly goal..." maxlength="120"><button type="button" id="monthly-add" aria-label="Add monthly goal">+</button></div>
         </div>
         <div class="vector-col">
-          <div class="v-head"><span class="v-dot" style="background:var(--red)"></span><span class="v-name">THIS YEAR</span><span class="v-meta" id="yearly-meta">GOALS</span></div>
+          <div class="v-head"><span class="v-dot" style="background:var(--red)"></span><span class="v-name">YEARLY GOAL</span><span class="v-meta" id="yearly-meta">GOALS</span></div>
           <div class="v-list" id="yearly-list"></div>
           <div class="v-add"><input type="text" id="yearly-input" placeholder="Add a yearly goal..." maxlength="120"><button type="button" id="yearly-add" aria-label="Add yearly goal">+</button></div>
         </div>
       </div>
-
-      <!-- Life Sheet -->
-      <div class="section-head">
-        <h2><i class="fa-solid fa-table" style="color:var(--green); margin-right:9px;"></i>Life Sheet</h2>
-        <span class="tag">HABIT TRACKER</span>
-      </div>
-      <section class="sheet-panel">
-        <div class="sheet-top">
-          <div id="sheet-tabs" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
-          <div class="sheet-tools">
-            <button class="tool-btn" id="add-sheet-btn" type="button">+ Sheet</button>
-            <button class="tool-btn" id="add-sheet-row" type="button">+ Row</button>
-            <button class="tool-btn" id="add-sheet-col" type="button">+ Col</button>
-            <button class="tool-btn danger" id="delete-sheet-btn" type="button">Delete</button>
-          </div>
-        </div>
-        <div class="sheet-wrap"><table class="lsheet" id="life-sheet"></table></div>
-        <div class="sheet-foot"><span id="sheet-stats">ROWS: 0 · CELLS VALIDATED: 100%</span></div>
       </section>
     </div>
   </div>
-
-  <div class="color-pop" id="sheet-color-pop">
-    <div class="cp-title">CELL COLOR</div>
-    <div class="color-grid" id="color-grid"></div>
-    <button class="cp-none" id="color-none" type="button">× &nbsp;No color</button>
-  </div>
+</div>
 
   <div class="toast" id="toast">Saved</div>
 
@@ -293,7 +274,7 @@
       </form>
       <div class="auth-guest-confirm" id="auth-guest-confirm" hidden>
         <div class="auth-guest-icon"><i class="fa-solid fa-hard-drive"></i></div>
-        <p class="auth-guest-message">As a guest, your goals, notes, and calendar are saved only in this browser on this device. AI chat and Team features require an account. Sign in or create an account to use them.</p>
+        <p class="auth-guest-message">As a guest, your goals, notes, and calendar are saved only in this browser on this device. Team features require an account. Sign in or create an account to use them.</p>
         <div class="auth-guest-name-field">
           <label for="auth-guest-name">Name (optional)</label>
           <input id="auth-guest-name" type="text" autocomplete="name" placeholder="What should we call you?">
